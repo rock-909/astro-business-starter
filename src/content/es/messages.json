@@ -1,0 +1,130 @@
+{
+  "theme": {
+    "switchToLight": "Cambiar al tema claro",
+    "switchToDark": "Cambiar al tema oscuro",
+    "switchToSystem": "Usar el tema del sistema"
+  },
+  "accessibility": {
+    "skipToContent": "Ir al contenido principal",
+    "mainNavigation": "Navegación principal",
+    "themeSelector": "Selector de tema",
+    "footerNavigation": "Navegación del pie de página"
+  },
+  "cookie": {
+    "title": "Preferencias de cookies",
+    "description": "Elige qué cookies opcionales y datos de atribución de consultas podemos usar. El análisis ayuda a entender el tráfico y guardar la campaña o fuente con tu consulta; la publicidad permite medir y personalizar anuncios y guardar sus identificadores de clic. Puedes enviar una consulta sin aceptar ninguna opción.",
+    "analytics": "Análisis",
+    "advertising": "Publicidad",
+    "learnMore": "Política de privacidad",
+    "acceptAll": "Permitir todo",
+    "saveChoices": "Guardar elecciones",
+    "customize": "Personalizar",
+    "rejectAll": "Rechazar todo",
+    "settings": "Configuración de cookies"
+  },
+  "structured-data": {
+    "website": {
+      "description": "Sitio de referencia para consultas"
+    }
+  },
+  "errors": {
+    "notFound": {
+      "title": "Página no encontrada",
+      "description": "La página que buscas no existe o se ha movido.",
+      "goHome": "Volver al inicio"
+    }
+  },
+  "legal": {
+    "tableOfContents": "Índice",
+    "lastUpdated": "Última actualización"
+  },
+  "navigation": {
+    "home": "Inicio",
+    "contactSales": "Iniciar una consulta",
+    "language": "Idiomas",
+    "siteDescription": "Sitio de referencia neutral para consultas."
+  },
+  "footer": {
+    "columns": {
+      "navigation": "Sitio",
+      "support": "Legal"
+    },
+    "sections": {
+      "navigation": {
+        "home": "Inicio",
+        "contact": "Contacto"
+      },
+      "support": {
+        "privacy": "Política de privacidad",
+        "terms": "Condiciones del servicio"
+      }
+    }
+  },
+  "home": {
+    "metadata": {
+      "description": "Un sitio de referencia de consultas no destinado a producción, con identidad, dominio y datos de contacto de ejemplo."
+    },
+    "title": "Sitio de consultas",
+    "description": "Un punto de partida para un sitio web empresarial. Visita la página de contacto para preparar una consulta.",
+    "contactLink": "Contacto",
+    "eyebrow": "Un punto de partida empresarial"
+  },
+  "contact": {
+    "panel": {
+      "contactTitle": "Correo y consulta",
+      "unconfiguredMailbox": "No se ha configurado un correo comercial para este sitio de referencia."
+    }
+  },
+  "inquiry": {
+    "form": {
+      "optional": "opcional",
+      "fullName": "Nombre completo",
+      "email": "Dirección de correo electrónico",
+      "message": "Mensaje",
+      "messageHint": "Comparte tus requisitos, plazos, mercado o cualquier contexto útil.",
+      "submit": "Enviar consulta",
+      "submitting": "Enviando...",
+      "success": "Recibido. El equipo puede revisar tu consulta y responder con el siguiente paso útil o con los datos que aún falten.",
+      "referenceLabel": "Referencia",
+      "privacyNotice": "Al enviar este formulario, aceptas nuestra Política de privacidad y las Condiciones del servicio.",
+      "noJsExplanation": "El formulario seguro necesita JavaScript porque la verificación contra bots no puede ejecutarse sin él.",
+      "noJsEmailPrefix": "Escríbenos directamente a",
+      "contactAriaLabel": "Consulta de contacto",
+      "turnstile": {
+        "unavailable": "La verificación de seguridad no está disponible temporalmente.",
+        "loadFailed": "No se ha podido cargar la verificación de seguridad.",
+        "expired": "La verificación de seguridad ha caducado. Complétala de nuevo.",
+        "rescueAfterEmail": "Incluye tus requisitos y datos de contacto."
+      },
+      "errors": {
+        "fieldSummary": "Revisa los campos resaltados e inténtalo de nuevo.",
+        "securitySummary": "La verificación de seguridad no se ha completado. Inténtalo de nuevo.",
+        "fullName": {
+          "required": "El nombre completo es obligatorio",
+          "invalid": "El nombre completo contiene caracteres no válidos",
+          "tooLong": "El nombre completo debe tener 100 caracteres o menos"
+        },
+        "email": {
+          "required": "La dirección de correo es obligatoria",
+          "invalid": "Introduce una dirección de correo válida",
+          "tooLong": "El correo debe tener 254 caracteres o menos"
+        },
+        "message": {
+          "invalid": "El mensaje contiene caracteres no válidos",
+          "tooLong": "El mensaje debe tener 2000 caracteres o menos"
+        },
+        "rateLimitSummary": "Demasiados intentos. Espera antes de volver a enviar la consulta.",
+        "rateLimitReady": "Ya puedes volver a enviar la consulta."
+      },
+      "title": "Iniciar una consulta",
+      "website": "Sitio web",
+      "unknown": "No hemos podido confirmar el resultado. Es posible que se haya recibido tu consulta. Conservamos tus datos; reintentar puede crear un duplicado. Puedes volver a intentarlo con una nueva verificación o utilizar un contacto configurado.",
+      "localePending": "Espera al resultado de la consulta antes de cambiar de idioma.",
+      "localeStorageUnavailable": "El navegador no permite conservar el borrador al cambiar de idioma. Copia o borra tus datos antes de cambiar."
+    }
+  },
+  "experiment": {
+    "label": "SITIO DE REFERENCIA",
+    "description": "Experimento Astro aislado · no preparado para uso comercial"
+  }
+}

@@ -1,0 +1,18 @@
+---
+import { parseStaticMarkdownBlocks } from './static-markdown-blocks';
+import InlineMarkdown from './InlineMarkdown.astro';
+import { messages, type Locale } from '../../site';
+interface Props { content: string; locale: Locale; showToc?: boolean }
+const { content, locale, showToc = false } = Astro.props;
+const blocks = parseStaticMarkdownBlocks(content);
+const headings = blocks.filter((block) => block.kind === 'heading');
+---
+{showToc && headings.length > 0 && <nav class="content-toc" aria-label={messages(locale).legal.tableOfContents}><h2>{messages(locale).legal.tableOfContents}</h2><ul>{headings.map((heading) => <li><a href={`#${heading.id}`}>{heading.displayText}</a></li>)}</ul></nav>}
+<div class="prose">
+  {blocks.map((block) => {
+    if (block.kind === 'heading') { const Tag = block.level; return <Tag id={block.id}>{block.displayText}</Tag>; }
+    if (block.kind === 'paragraph') return <p>{block.emphasized ? <strong><InlineMarkdown text={block.text} locale={locale} /></strong> : <InlineMarkdown text={block.text} locale={locale} />}</p>;
+    if (block.kind === 'list') { const Tag = block.ordered ? 'ol' : 'ul'; return <Tag>{block.items.map((item) => <li><InlineMarkdown text={item} locale={locale} /></li>)}</Tag>; }
+    return <div class="content-table" role="region" aria-label={block.headers.join(', ')} tabindex="0"><table><thead><tr>{block.headers.map((header) => <th scope="col">{header}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr>{block.headers.map((_, index) => <td><InlineMarkdown text={row[index] || ''} locale={locale} /></td>)}</tr>)}</tbody></table></div>;
+  })}
+</div>

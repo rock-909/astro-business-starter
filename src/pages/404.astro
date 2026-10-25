@@ -1,0 +1,9 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { messages, pathFor } from '../site';
+export const prerender = false;
+Astro.response.status = 404;
+const locale = /^\/es(?:\/|$)/.test(Astro.url.pathname) ? 'es' : 'en';
+const t = messages(locale);
+---
+<SiteLayout locale={locale} title={t.errors.notFound.title} description={t.errors.notFound.description} notFound><section class="wrap not-found"><p class="eyebrow">404</p><h1>{t.errors.notFound.title}</h1><p class="prose">{t.errors.notFound.description}</p><a class="button" href={pathFor(locale, 'home')}>{t.errors.notFound.goHome}<span aria-hidden="true">↗</span></a></section></SiteLayout>

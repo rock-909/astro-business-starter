@@ -1,0 +1,130 @@
+{
+  "theme": {
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme",
+    "switchToSystem": "Switch to system theme"
+  },
+  "accessibility": {
+    "skipToContent": "Skip to main content",
+    "mainNavigation": "Main navigation",
+    "themeSelector": "Theme selector",
+    "footerNavigation": "Footer navigation"
+  },
+  "cookie": {
+    "title": "Cookie preferences",
+    "description": "Choose which optional cookies and inquiry attribution we may use. Analytics helps us understand site traffic and save campaign/source details with your inquiry; advertising allows ad measurement/personalisation and saves ad click IDs. You can send an inquiry without either choice.",
+    "analytics": "Analytics",
+    "advertising": "Advertising",
+    "learnMore": "Privacy policy",
+    "acceptAll": "Allow all",
+    "saveChoices": "Save choices",
+    "customize": "Customize",
+    "rejectAll": "Reject all",
+    "settings": "Cookie settings"
+  },
+  "structured-data": {
+    "website": {
+      "description": "Inquiry site reference"
+    }
+  },
+  "errors": {
+    "notFound": {
+      "title": "Page not found",
+      "description": "The page you're looking for doesn't exist or has been moved.",
+      "goHome": "Back to homepage"
+    }
+  },
+  "legal": {
+    "tableOfContents": "Table of Contents",
+    "lastUpdated": "Last updated"
+  },
+  "navigation": {
+    "home": "Home",
+    "contactSales": "Start an inquiry",
+    "language": "Languages",
+    "siteDescription": "A neutral Inquiry site reference."
+  },
+  "footer": {
+    "columns": {
+      "navigation": "Site",
+      "support": "Legal"
+    },
+    "sections": {
+      "navigation": {
+        "home": "Home",
+        "contact": "Contact"
+      },
+      "support": {
+        "privacy": "Privacy Policy",
+        "terms": "Terms of Service"
+      }
+    }
+  },
+  "home": {
+    "metadata": {
+      "description": "A non-production inquiry reference site using sentinel identity, domain, and contact details."
+    },
+    "title": "Inquiry site",
+    "description": "A starting point for a business website. Visit the contact page to prepare an inquiry.",
+    "contactLink": "Contact",
+    "eyebrow": "A business website starting point"
+  },
+  "contact": {
+    "panel": {
+      "contactTitle": "Email & inquiry",
+      "unconfiguredMailbox": "No business mailbox has been configured for this reference site."
+    }
+  },
+  "inquiry": {
+    "form": {
+      "optional": "optional",
+      "fullName": "Full name",
+      "email": "Email address",
+      "message": "Message",
+      "messageHint": "Share your requirement, timing, market or any useful context.",
+      "submit": "Send inquiry",
+      "submitting": "Sending...",
+      "success": "Received. The team can review your inquiry and respond with the next useful step or the details still needed.",
+      "referenceLabel": "Reference",
+      "privacyNotice": "By submitting this form, you agree to our Privacy Policy and Terms of Service.",
+      "noJsExplanation": "The secure inquiry form needs JavaScript because bot verification cannot run without it.",
+      "noJsEmailPrefix": "Email us directly at",
+      "contactAriaLabel": "Contact inquiry",
+      "turnstile": {
+        "unavailable": "Security verification is temporarily unavailable.",
+        "loadFailed": "Security verification failed to load.",
+        "expired": "Security verification expired. Please complete it again.",
+        "rescueAfterEmail": "Include your requirement and contact details."
+      },
+      "errors": {
+        "fieldSummary": "Please review the highlighted fields and try again.",
+        "securitySummary": "Security verification did not complete. Please try again.",
+        "fullName": {
+          "required": "Full name is required",
+          "invalid": "Full name contains invalid characters",
+          "tooLong": "Full name must be 100 characters or fewer"
+        },
+        "email": {
+          "required": "Email address is required",
+          "invalid": "Please enter a valid email address",
+          "tooLong": "Email must be 254 characters or fewer"
+        },
+        "message": {
+          "invalid": "Message contains invalid characters",
+          "tooLong": "Message must be 2000 characters or fewer"
+        },
+        "rateLimitSummary": "Too many attempts. Please wait before sending your inquiry again.",
+        "rateLimitReady": "You can send your inquiry again now."
+      },
+      "title": "Start an inquiry",
+      "website": "Website",
+      "unknown": "We could not confirm the result. Your inquiry may have been received. Your details are kept below; retrying may create a duplicate. You can retry with a new verification or use a configured contact method.",
+      "localePending": "Wait for the inquiry result before switching language.",
+      "localeStorageUnavailable": "Your browser cannot preserve this draft across a language change. Copy or clear your details before switching."
+    }
+  },
+  "experiment": {
+    "label": "REFERENCE SITE",
+    "description": "Isolated Astro experiment · not ready for business use"
+  }
+}

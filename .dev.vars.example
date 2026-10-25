@@ -1,0 +1,15 @@
+# Server-only bindings. Leave absent during normal experiment development.
+# tests/harness.mjs supplies inert fixture values and replaces all external fetch.
+APP_ENV=local
+PUBLIC_SITE_URL=https://example.invalid
+TURNSTILE_ALLOWED_HOSTS=example.invalid
+TURNSTILE_SECRET_KEY=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+INQUIRY_TO_EMAIL=
+AIRTABLE_API_KEY=
+AIRTABLE_BASE_ID=
+AIRTABLE_TABLE_NAME=
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+RATE_LIMIT_PEPPER=

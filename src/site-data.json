@@ -1,0 +1,27 @@
+{
+  "name": "Astro Business Starter",
+  "description": "Neutral inquiry reference site that must be replaced before launch",
+  "contact": {
+    "email": ""
+  },
+  "social": {
+    "twitter": "",
+    "linkedin": ""
+  },
+  "brandAssets": {
+    "ogImage": "/opengraph-image.png",
+    "favicon": "/icon.svg"
+  },
+  "readiness": {
+    "ownerConfirmedIdentity": false,
+    "legalReviewed": {
+      "en": false,
+      "es": false
+    }
+  },
+  "seo": {
+    "titleTemplate": "%s | Astro Business Starter",
+    "defaultTitle": "Astro Business Starter",
+    "defaultDescription": "A non-production inquiry reference site using sentinel identity, domain, and contact details."
+  }
+}
