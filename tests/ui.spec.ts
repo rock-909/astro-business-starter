@@ -247,6 +247,33 @@ test('mobile layout is keyboard usable and has no horizontal overflow', async ({
   await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });
 });
 
+test('keyboard and assistive tech never reach the honeypot field', async ({ page }) => {
+  await page.goto('/contact');
+  await dismissConsent(page);
+  const form = page.locator('form[data-inquiry-form]');
+  await expect(form.getByRole('textbox', { name: 'Website' })).toHaveCount(0);
+  const honeypot = page.locator('#website');
+  await expect(honeypot).toHaveAttribute('tabindex', '-1');
+  await expect(honeypot).toHaveAttribute('autocomplete', 'off');
+  await expect(honeypot.locator('..')).toHaveAttribute('aria-hidden', 'true');
+
+  await page.getByLabel('Full name', { exact: true }).focus();
+  const privacy = form.getByRole('link', { name: 'Privacy Policy' });
+  const visited: string[] = [];
+  for (let presses = 0; presses < 12; presses++) {
+    await page.keyboard.press('Tab');
+    visited.push(
+      await page.evaluate(
+        () => document.activeElement?.id || document.activeElement?.tagName || '',
+      ),
+    );
+    if (await privacy.evaluate((link) => link === document.activeElement)) break;
+  }
+  expect(visited).toContain('message');
+  expect(visited).not.toContain('website');
+  await expect(privacy).toBeFocused();
+});
+
 test('session draft survives refresh and a legal-page round trip', async ({ page }) => {
   await page.goto('/contact');
   await dismissConsent(page);

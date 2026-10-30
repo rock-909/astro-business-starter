@@ -268,6 +268,31 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
       assert.equal(keys[3], keys[4]);
     });
 
+    await suite.test('X-Forwarded-For cannot choose or change the rate bucket', async () => {
+      const bucket = async (headers) => {
+        reset();
+        const response = await action(h, { website: 'bot' }, { headers });
+        assert.equal(response.status, 200);
+        return JSON.parse(h.state.calls[0].body)[0][1];
+      };
+      const edge = await bucket({ 'cf-connecting-ip': '203.0.113.20' });
+      const spoofTarget = await bucket({ 'cf-connecting-ip': '198.51.100.7' });
+      const noIdentity = await bucket({ 'cf-connecting-ip': '' });
+      assert.notEqual(edge, spoofTarget);
+      for (const forwarded of ['198.51.100.7', '198.51.100.7, 203.0.113.20', '2001:db8::1'])
+        assert.equal(
+          await bucket({ 'cf-connecting-ip': '203.0.113.20', 'x-forwarded-for': forwarded }),
+          edge,
+          `same edge IP keeps its bucket; x-forwarded-for ${forwarded}`,
+        );
+      const forwardedOnly = await bucket({
+        'cf-connecting-ip': '',
+        'x-forwarded-for': '198.51.100.7',
+      });
+      assert.notEqual(forwardedOnly, spoofTarget);
+      assert.equal(forwardedOnly, noIdentity);
+    });
+
     await suite.test(
       'true overlimit returns Retry-After; store outage continues Turnstile (not bypass)',
       async () => {
