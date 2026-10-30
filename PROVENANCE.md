@@ -28,6 +28,7 @@ The lockfile retains the complete dependency tree, registry locations, integrity
 | astro | 7.4.2 | MIT |
 | @astrojs/cloudflare | 14.4.2 | MIT |
 | @astrojs/check | 0.9.12 | MIT |
+| @emnapi/runtime (peer required by `@astrojs/check`'s WASM runtime) | 1.11.3 | MIT |
 | @playwright/test | 1.64.1 | Apache-2.0 |
 | typescript | 6.0.3 | Apache-2.0 |
 | wrangler | 4.152.0 | MIT OR Apache-2.0 |
