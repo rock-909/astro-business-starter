@@ -1,0 +1,27 @@
+# Dependabot version updates. CI validates each pull request it opens.
+# Dependabot's default 3-day cooldown applies to version updates; security
+# updates are not delayed by it.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Routine minor/patch bumps arrive as one PR; major bumps stay separate.
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
