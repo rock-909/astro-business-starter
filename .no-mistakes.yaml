@@ -1,0 +1,35 @@
+# no-mistakes 门禁配置（仅从默认分支读取）。
+# 审查由 GPT-6 Astra（中档）经 Codex 执行，由操作者全局配置的 review_agents.reviewer 指定；其余步骤均由 Claude 执行。
+# 模型与推理档位在操作者的全局 no-mistakes 配置中设定，不在本文件。
+# 未设 lint：本项目没有 lint/format 脚本；`npm run check` 在全新 `npm ci` 副本中缺少 @emnapi/runtime，会弹出安装提示并以 0 退出而未做检查，不能作为门禁。
+agent: claude
+
+commands:
+  prepare: "npm ci"
+
+review:
+  path_instructions:
+    - path: "**"
+      instructions: |
+        只审本 PR 声明要解决的问题。与本 PR 无关的既有问题记为后续事项，不作为阻塞发现。
+        对每个 PR 依次检查四点：
+        1. 完整性：改动是否完整解决所声明的问题；同一根因的其他直接调用方是否遗漏。
+        2. 行为偏移：是否改变了未声明的用户可见行为或业务契约，例如 Home、Contact、Privacy、Terms 的英/西两种语言旅程，询盘准入顺序与邮件/CRM 双通道交付语义（任一路确认接收才报告成功、结果未知时保留草稿由买家重试），以及模板的 `npm run readiness` 拒绝继续生效。
+        3. 项目契合：是否为最小改动；是否在没有真实消费者和可复现失败的情况下新增依赖、抽象、配置、环境变量、兼容层、门禁或脚本；是否顺手重构或扩大范围；净增代码是否有理由。
+        4. 重大风险：询盘送达、数据完整性、安全（敏感值与买家资料不得进入源码、公开构建物或日志）、可访问性、上线状态的真实性。
+        证据核对（按改动类型）：
+        - 修复缺陷：描述或提交说明中必须写明复现测试在修复前失败、修复后通过的命令与结果，以及相关回归检查的结果；缺失或与代码不符即为发现。
+        - 新增或改写测试：必须保护可观察行为，并写明反向检查（被保护的行为被改坏时测试失败）的命令与结果；只测实现细节、mock 被测对象本身、绕过真实注册的 Action 或 workerd 链路、削弱或删除断言，都是发现。
+        - 其他代码、测试或配置改动（含删除与重构）：必须附引用检索结果和相关检查的实际运行结果；只有文字说明、没有运行结果即为发现。
+        - 纯文档改动（不影响可执行代码或配置）：不要求运行证据；其中关于代码、规则或流程的事实陈述必须与仓库现状一致，不一致即为发现。
+        不得调用真实的 Resend、Airtable、Turnstile、Upstash、Google Analytics，不得发送真实询盘。
+
+test:
+  instructions: |
+    按改动范围先运行能证明结果的最窄验证，再按影响范围扩大；命令以 `.claude/rules/testing-runtime.md` 的表为准：`npm run check`、`npm run build:test`、`npm test`、`npm run test:browser`，行为改动最后运行 `npm run verify`。
+    会写同一 `dist` 的构建与读取它的测试串行运行；浏览器测试需要本机 Chromium（可用 `CHROMIUM_PATH` 指定），若复用已有服务，先确认它服务当前构建。
+    `npm run check` 若弹出安装 @astrojs/check 的提示，就是没有执行检查，即使退出码为 0 也记为未执行，不得算作通过，也不得为此安装或改动依赖。
+    `npm run readiness` 对模板预期拒绝；拒绝不是测试失败，不得为让它通过而改配置。
+    不得调用真实的 Resend、Airtable、Turnstile、Upstash、Google Analytics，不得发送真实询盘；需要真实环境的验证写明留给人工。
+    不得运行任何向 Cloudflare 或其他主机部署或上传的命令，无论使用什么 URL，包括 `wrangler deploy`、`wrangler versions upload`、`wrangler versions deploy`、`wrangler preview`、`wrangler secret put` 以及其他写入远端 Cloudflare 资源的 `wrangler` 命令；部署相关代码只用记录所收参数的桩或假部署工具验证；需要真实部署的场景写明留给人工或指派的部署任务。
+    运行工作副本默认没有 node_modules；运行测试或检查之前先运行 `npm ci`。
