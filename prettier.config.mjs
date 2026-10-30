@@ -1,6 +1,6 @@
 /** @type {import("prettier").Config} */
 const config = {
-  plugins: ["prettier-plugin-astro"],
+  plugins: ['prettier-plugin-astro'],
   // Match the quote style and line length this codebase already uses.
   singleQuote: true,
   printWidth: 100,

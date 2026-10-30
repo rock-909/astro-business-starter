@@ -1,13 +1,21 @@
 ---
 import type { Locale } from '../../site';
-interface Props { text: string; locale: Locale }
+interface Props {
+  text: string;
+  locale: Locale;
+}
 const { text, locale } = Astro.props;
 const tokens: { text: string; bold: boolean; href?: string; external?: boolean }[] = [];
 function linkHref(href: string): string | undefined {
   if (/[\\\u0000-\u0020]/u.test(href) || href.startsWith('//')) return;
   if (/^https?:\/\//i.test(href)) return href;
   if (!href.startsWith('/')) return;
-  if (/^\/[^?#]*\.[a-z0-9]+(?:[?#]|$)/i.test(href) || locale === 'en' || /^\/es(?:\/|[?#]|$)/.test(href)) return href;
+  if (
+    /^\/[^?#]*\.[a-z0-9]+(?:[?#]|$)/i.test(href) ||
+    locale === 'en' ||
+    /^\/es(?:\/|[?#]|$)/.test(href)
+  )
+    return href;
   return `/es${href === '/' ? '' : href}`;
 }
 for (const part of text.split(/(\*\*[^*]+\*\*)/g)) {
@@ -18,10 +26,42 @@ for (const part of text.split(/(\*\*[^*]+\*\*)/g)) {
   for (const match of inner.matchAll(/\[([^\]]+)\]\((\/[^\s)]*|https?:\/\/[^\s)]+)\)/g)) {
     if (match.index > offset) tokens.push({ text: inner.slice(offset, match.index), bold });
     const href = linkHref(match[2]!);
-    tokens.push({ text: href ? match[1]! : match[0], bold, href, external: !!href && !href.startsWith('/') });
+    tokens.push({
+      text: href ? match[1]! : match[0],
+      bold,
+      href,
+      external: !!href && !href.startsWith('/'),
+    });
     offset = match.index + match[0].length;
   }
   if (offset < inner.length) tokens.push({ text: inner.slice(offset), bold });
 }
 ---
-{tokens.map((token) => token.bold ? <strong>{token.href ? <a href={token.href} target={token.external ? '_blank' : undefined} rel={token.external ? 'noopener noreferrer' : undefined}>{token.text}</a> : token.text}</strong> : token.href ? <a href={token.href} target={token.external ? '_blank' : undefined} rel={token.external ? 'noopener noreferrer' : undefined}>{token.text}</a> : token.text)}
+
+{tokens.map((token) =>
+  token.bold ? (
+    <strong>
+      {token.href ? (
+        <a
+          href={token.href}
+          target={token.external ? '_blank' : undefined}
+          rel={token.external ? 'noopener noreferrer' : undefined}
+        >
+          {token.text}
+        </a>
+      ) : (
+        token.text
+      )}
+    </strong>
+  ) : token.href ? (
+    <a
+      href={token.href}
+      target={token.external ? '_blank' : undefined}
+      rel={token.external ? 'noopener noreferrer' : undefined}
+    >
+      {token.text}
+    </a>
+  ) : (
+    token.text
+  ),
+)}

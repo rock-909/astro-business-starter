@@ -2,10 +2,13 @@
 import { messages, site, pathFor, type Locale } from '../site';
 import { inquiryLimits } from '../lib/inquiry-limits';
 
-interface Props { locale: Locale }
+interface Props {
+  locale: Locale;
+}
 const { locale } = Astro.props;
 const t = messages(locale).inquiry.form;
 ---
+
 <section class="inquiry-card" id="inquiry" aria-label={t.contactAriaLabel}>
   <h2>{t.title}</h2>
   <form
@@ -19,18 +22,45 @@ const t = messages(locale).inquiry.form;
   >
     <div class="field">
       <label for="fullName">{t.fullName}</label>
-      <input id="fullName" name="fullName" type="text" autocomplete="name" required maxlength={inquiryLimits.fullName} aria-describedby="fullName-error" />
+      <input
+        id="fullName"
+        name="fullName"
+        type="text"
+        autocomplete="name"
+        required
+        maxlength={inquiryLimits.fullName}
+        aria-describedby="fullName-error"
+      />
       <p class="field-error" id="fullName-error" hidden></p>
     </div>
     <div class="field">
       <label for="email">{t.email}</label>
-      <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength={inquiryLimits.email} aria-describedby="email-error" />
+      <input
+        id="email"
+        name="email"
+        type="email"
+        autocomplete="email"
+        inputmode="email"
+        required
+        maxlength={inquiryLimits.email}
+        aria-describedby="email-error"
+      />
       <p class="field-error" id="email-error" hidden></p>
     </div>
     <div class="field">
-      <label for="message">{t.message} <span class="optional">({t.optional})</span></label>
-      <textarea id="message" name="message" rows="5" maxlength={inquiryLimits.message} aria-describedby="message-hint message-error"></textarea>
-      <p class="field-hint" id="message-hint">{t.messageHint}</p>
+      <label for="message">
+        {t.message} <span class="optional">({t.optional})</span>
+      </label>
+      <textarea
+        id="message"
+        name="message"
+        rows="5"
+        maxlength={inquiryLimits.message}
+        aria-describedby="message-hint message-error"
+      ></textarea>
+      <p class="field-hint" id="message-hint">
+        {t.messageHint}
+      </p>
       <p class="field-error" id="message-error" hidden></p>
     </div>
     <div class="honeypot" aria-hidden="true">
@@ -39,20 +69,36 @@ const t = messages(locale).inquiry.form;
     </div>
     <div class="verification">
       <div data-turnstile></div>
-      <p data-verification-status role="status">{t.turnstile.unavailable}</p>
+      <p data-verification-status role="status">
+        {t.turnstile.unavailable}
+      </p>
     </div>
-    <div data-form-status class="form-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
-    <button type="submit" class="button" data-submit disabled>{t.submit}<span aria-hidden="true">↗</span></button>
+    <div
+      data-form-status
+      class="form-status"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      tabindex="-1"
+    ></div>
+    <button type="submit" class="button" data-submit disabled>
+      {t.submit}
+      <span aria-hidden="true">↗</span>
+    </button>
     <p class="privacy-notice">
       {t.privacyNotice}{' '}
-      <a href={pathFor(locale, 'privacy')}>{messages(locale).footer.sections.support.privacy}</a>{' · '}
+      <a href={pathFor(locale, 'privacy')}>{messages(locale).footer.sections.support.privacy}</a>
+      {' · '}
       <a href={pathFor(locale, 'terms')}>{messages(locale).footer.sections.support.terms}</a>
     </p>
   </form>
-  <noscript><p class="fallback">{t.noJsExplanation}</p></noscript>
+  <noscript>
+    <p class="fallback">{t.noJsExplanation}</p>
+  </noscript>
   {site.contact.email && (
     <p class="fallback">
-      {t.noJsEmailPrefix} <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>. {t.turnstile.rescueAfterEmail}
+      {t.noJsEmailPrefix} <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>.{' '}
+      {t.turnstile.rescueAfterEmail}
     </p>
   )}
 </section>

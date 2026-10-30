@@ -2,30 +2,54 @@
 import SiteLayout from '../layouts/SiteLayout.astro';
 import InquiryForm from '../components/InquiryForm.astro';
 import StaticContent from '../components/content/StaticContent.astro';
-import { locales, pages, site, messages, pathFor, pageContent, type Locale, type PageKey } from '../site';
+import {
+  locales,
+  pages,
+  site,
+  messages,
+  pathFor,
+  pageContent,
+  type Locale,
+  type PageKey,
+} from '../site';
 
 export const prerender = true;
 export function getStaticPaths() {
-  return locales.flatMap((locale) => pages.map(({ key }) => ({
-    params: { path: pathFor(locale, key).slice(1) || undefined },
-    props: { locale, page: key },
-  })));
+  return locales.flatMap((locale) =>
+    pages.map(({ key }) => ({
+      params: { path: pathFor(locale, key).slice(1) || undefined },
+      props: { locale, page: key },
+    })),
+  );
 }
 const { locale, page } = Astro.props as { locale: Locale; page: PageKey };
 const t = messages(locale);
 const content = page === 'home' ? undefined : pageContent(locale, page);
 const title = content?.metadata.seo.title || site.name;
 const description = content?.metadata.seo.description || t.home.metadata.description;
-const address = [site.company?.location?.address, site.company?.location?.city, site.company?.location?.country].filter(Boolean).join(', ');
+const address = [
+  site.company?.location?.address,
+  site.company?.location?.city,
+  site.company?.location?.country,
+]
+  .filter(Boolean)
+  .join(', ');
 ---
+
 <SiteLayout locale={locale} page={page} title={title} description={description}>
   {page === 'home' ? (
     <section class="wrap hero">
       <p class="eyebrow">{t.home.eyebrow}</p>
       <h1>{t.home.title}</h1>
       <p class="hero-copy">{t.home.description}</p>
-      <a class="button" href={pathFor(locale, 'contact')}>{t.home.contactLink}<span aria-hidden="true">↗</span></a>
-      <div class="hero-rule"><strong>EN / ES</strong><span>{t.home.metadata.description}</span></div>
+      <a class="button" href={pathFor(locale, 'contact')}>
+        {t.home.contactLink}
+        <span aria-hidden="true">↗</span>
+      </a>
+      <div class="hero-rule">
+        <strong>EN / ES</strong>
+        <span>{t.home.metadata.description}</span>
+      </div>
     </section>
   ) : page === 'contact' ? (
     <div class="wrap">
@@ -40,9 +64,15 @@ const address = [site.company?.location?.address, site.company?.location?.city, 
           <p>{t.inquiry.form.messageHint}</p>
           {(site.contact.email || site.contact.phone || site.contact.whatsapp || address) && (
             <div class="contact-methods">
-              {site.contact.email && <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>}
+              {site.contact.email && (
+                <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>
+              )}
               {site.contact.phone && <a href={`tel:${site.contact.phone}`}>{site.contact.phone}</a>}
-              {site.contact.whatsapp && <a href={`https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}`}>WhatsApp {site.contact.whatsapp}</a>}
+              {site.contact.whatsapp && (
+                <a href={`https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}`}>
+                  WhatsApp {site.contact.whatsapp}
+                </a>
+              )}
               {address && <address>{address}</address>}
             </div>
           )}
@@ -57,7 +87,8 @@ const address = [site.company?.location?.address, site.company?.location?.city, 
       <h1>{content!.metadata.title}</h1>
       <StaticContent content={content!.content} locale={locale} showToc />
       <p class="legal-note">
-        {t.legal.lastUpdated}: <time datetime={content!.metadata.updatedAt}>{content!.metadata.updatedAt}</time>
+        {t.legal.lastUpdated}:{' '}
+        <time datetime={content!.metadata.updatedAt}>{content!.metadata.updatedAt}</time>
       </p>
     </article>
   )}

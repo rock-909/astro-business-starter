@@ -1,12 +1,13 @@
-import type { ContentPage } from "../../site";
+import type { ContentPage } from '../../site';
 
 const termsPage = {
   metadata: {
-    title: "Condiciones — pendientes de completar",
-    updatedAt: "2026-08-06",
+    title: 'Condiciones — pendientes de completar',
+    updatedAt: '2026-08-06',
     seo: {
-      title: "Condiciones — pendientes de completar",
-      description: "Texto provisional incompleto. El responsable debe sustituirlo antes del lanzamiento.",
+      title: 'Condiciones — pendientes de completar',
+      description:
+        'Texto provisional incompleto. El responsable debe sustituirlo antes del lanzamiento.',
     },
   },
   content: String.raw`
@@ -17,4 +18,3 @@ Sustituye este texto provisional por condiciones revisadas para la actividad rea
 } satisfies ContentPage;
 
 export default termsPage;
-

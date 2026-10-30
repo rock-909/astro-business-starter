@@ -14,9 +14,15 @@ export function assertInquiryAdmission(request: Request): void {
   try {
     const source = new URL(origin);
     const target = new URL(request.url);
-    if ((source.protocol === 'https:' || source.protocol === 'http:') &&
-        source.origin === target.origin && source.href === `${source.origin}/`) return;
-  } catch { /* malformed origins are rejected below */ }
+    if (
+      (source.protocol === 'https:' || source.protocol === 'http:') &&
+      source.origin === target.origin &&
+      source.href === `${source.origin}/`
+    )
+      return;
+  } catch {
+    /* malformed origins are rejected below */
+  }
   throw new ActionError({ code: 'FORBIDDEN', message: 'INVALID_REQUEST' });
 }
 
@@ -35,7 +41,8 @@ export async function boundDeclaredInquiryBody(request: Request): Promise<void> 
       const { done, value } = await reader.read();
       if (done) return;
       received += value.byteLength;
-      if (received > 65536) throw new ActionError({ code: 'CONTENT_TOO_LARGE', message: 'BODY_TOO_LARGE' });
+      if (received > 65536)
+        throw new ActionError({ code: 'CONTENT_TOO_LARGE', message: 'BODY_TOO_LARGE' });
     }
   } catch (error) {
     // Awaiting just one tee's cancellation can deadlock until its sibling reads.
@@ -43,5 +50,7 @@ export async function boundDeclaredInquiryBody(request: Request): Promise<void> 
     void request.body.cancel().catch(() => {});
     if (error instanceof ActionError) throw error;
     throw new ActionError({ code: 'BAD_REQUEST', message: 'INVALID_REQUEST' });
-  } finally { reader.releaseLock(); }
+  } finally {
+    reader.releaseLock();
+  }
 }

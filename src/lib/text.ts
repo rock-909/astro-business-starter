@@ -19,11 +19,11 @@ const DISPLAY_SPOOF_CHARS = /[\u202A-\u202E\u2066-\u2069]|[^\P{Cc}\s]/gu;
  * Use this for single-line fields: names, company names, subject, etc.
  */
 export function sanitizePlainText(input: string): string {
-  if (typeof input !== "string") {
-    return "";
+  if (typeof input !== 'string') {
+    return '';
   }
 
-  return input.replace(DISPLAY_SPOOF_CHARS, "").replace(/\s+/g, " ").trim();
+  return input.replace(DISPLAY_SPOOF_CHARS, '').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -45,16 +45,15 @@ export function sanitizePlainText(input: string): string {
  * - trim the whole value.
  */
 export function sanitizeMultilineText(input: string): string {
-  if (typeof input !== "string") {
-    return "";
+  if (typeof input !== 'string') {
+    return '';
   }
 
   return input
-    .replace(/\r\n?/g, "\n")
-    .replace(DISPLAY_SPOOF_CHARS, "")
-    .replace(/[^\S\n]+/g, " ")
-    .replace(/ ?\n ?/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\r\n?/g, '\n')
+    .replace(DISPLAY_SPOOF_CHARS, '')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ ?\n ?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
-

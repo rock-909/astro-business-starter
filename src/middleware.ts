@@ -18,15 +18,20 @@ export const onRequest = defineMiddleware(async (context, next) => {
   try {
     assertInquiryAdmission(context.request);
     await boundDeclaredInquiryBody(context.request);
-  }
-  catch (error) {
+  } catch (error) {
     if (!(error instanceof ActionError)) throw error;
     const serialized = serializeActionResult({ data: undefined, error });
     if (serialized.type !== 'error') throw new Error('Unexpected action serialization');
-    return secure(new Response(serialized.body, { status: serialized.status, headers: { 'Content-Type': serialized.contentType, 'Cache-Control': 'no-store' } }));
+    return secure(
+      new Response(serialized.body, {
+        status: serialized.status,
+        headers: { 'Content-Type': serialized.contentType, 'Cache-Control': 'no-store' },
+      }),
+    );
   }
   const response = secure(await next());
   response.headers.set('Cache-Control', 'no-store');
-  if (context.locals.inquiryRetryAfter !== undefined) response.headers.set('Retry-After', String(context.locals.inquiryRetryAfter));
+  if (context.locals.inquiryRetryAfter !== undefined)
+    response.headers.set('Retry-After', String(context.locals.inquiryRetryAfter));
   return response;
 });

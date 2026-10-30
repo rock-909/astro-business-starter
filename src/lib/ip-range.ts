@@ -16,17 +16,17 @@ function parseIPv6Segment(segment: string): bigint | null {
 }
 
 function splitIPv6Side(side: string): string[] {
-  return side === "" ? [] : side.split(":");
+  return side === '' ? [] : side.split(':');
 }
 
 export function ipv4ToInteger(ip: string): number | null {
-  const segments = ip.split(".");
+  const segments = ip.split('.');
   if (segments.length !== IPV4_OCTET_COUNT) return null;
 
   let value = 0;
   for (const segment of segments) {
     if (!/^\d+$/u.test(segment)) return null;
-    if (segment.length > 1 && segment[0] === "0") return null;
+    if (segment.length > 1 && segment[0] === '0') return null;
 
     const octet = Number.parseInt(segment, 10);
     if (octet > IPV4_MAX_OCTET) {
@@ -46,11 +46,11 @@ export function integerToIpv4(value: number): string {
     (normalized >>> 16) & IPV4_MAX_OCTET,
     (normalized >>> 8) & IPV4_MAX_OCTET,
     normalized & IPV4_MAX_OCTET,
-  ].join(".");
+  ].join('.');
 }
 
 interface IPv6SegmentSideOptions {
-  side: "left" | "right";
+  side: 'left' | 'right';
   hasCompression: boolean;
 }
 
@@ -59,8 +59,8 @@ function normalizeIPv6Segments(
   options: IPv6SegmentSideOptions,
 ): string[] | null {
   const lastSegment = segments.at(-1);
-  if (lastSegment?.includes(".")) {
-    if (options.hasCompression && options.side === "left") {
+  if (lastSegment?.includes('.')) {
+    if (options.hasCompression && options.side === 'left') {
       return null;
     }
 
@@ -69,8 +69,8 @@ function normalizeIPv6Segments(
 
     if (options.hasCompression) {
       if (
-        options.side !== "right" ||
-        segments.slice(0, -1).some((segment) => segment.includes("."))
+        options.side !== 'right' ||
+        segments.slice(0, -1).some((segment) => segment.includes('.'))
       ) {
         return null;
       }
@@ -79,9 +79,7 @@ function normalizeIPv6Segments(
     }
 
     const normalized = segments.slice(0, -1);
-    normalized.push(
-      ((ipv4Value >>> IPV6_BITS_PER_SEGMENT) & IPV4_SEGMENT_MASK).toString(16),
-    );
+    normalized.push(((ipv4Value >>> IPV6_BITS_PER_SEGMENT) & IPV4_SEGMENT_MASK).toString(16));
     normalized.push((ipv4Value & IPV4_SEGMENT_MASK).toString(16));
     return normalized;
   }
@@ -90,18 +88,18 @@ function normalizeIPv6Segments(
 }
 
 export function ipv6ToBigInt(ip: string): bigint | null {
-  const compressionIndex = ip.indexOf("::");
+  const compressionIndex = ip.indexOf('::');
   const hasCompression = compressionIndex !== -1;
 
   const leftRaw = hasCompression ? ip.slice(0, compressionIndex) : ip;
-  const rightRaw = hasCompression ? ip.slice(compressionIndex + 2) : "";
+  const rightRaw = hasCompression ? ip.slice(compressionIndex + 2) : '';
 
   const leftSegments = normalizeIPv6Segments(splitIPv6Side(leftRaw), {
-    side: "left",
+    side: 'left',
     hasCompression,
   });
   const rightSegments = normalizeIPv6Segments(splitIPv6Side(rightRaw), {
-    side: "right",
+    side: 'right',
     hasCompression,
   });
 
@@ -109,17 +107,11 @@ export function ipv6ToBigInt(ip: string): bigint | null {
 
   const totalProvided = leftSegments.length + rightSegments.length;
   const missingSegments = IPV6_SEGMENT_COUNT - totalProvided;
-  const validCount = hasCompression
-    ? missingSegments > 0
-    : missingSegments === 0;
+  const validCount = hasCompression ? missingSegments > 0 : missingSegments === 0;
   if (!validCount) return null;
 
   const segments = hasCompression
-    ? [
-        ...leftSegments,
-        ...Array.from({ length: missingSegments }, () => "0"),
-        ...rightSegments,
-      ]
+    ? [...leftSegments, ...Array.from({ length: missingSegments }, () => '0'), ...rightSegments]
     : leftSegments;
 
   return segments.reduce<bigint | null>((accumulator, segment) => {
@@ -159,4 +151,3 @@ export function ipv4MappedEmbeddedAddress(ip: string): number | null {
 
   return Number(value & IPV4_ADDRESS_MASK) >>> 0;
 }
-

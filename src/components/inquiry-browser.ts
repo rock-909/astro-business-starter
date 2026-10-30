@@ -24,7 +24,8 @@ function syncButton() {
   submit.disabled = pending || !token || Date.now() < cooldownUntil;
   submit.textContent = pending ? copy.submitting : copy.submit;
   form.setAttribute('aria-busy', String(pending));
-  for (const name of ['fullName', 'email', 'message']) (form.elements.namedItem(name) as HTMLInputElement).disabled = pending;
+  for (const name of ['fullName', 'email', 'message'])
+    (form.elements.namedItem(name) as HTMLInputElement).disabled = pending;
 }
 function report(text: string, state: 'error' | 'success') {
   status.textContent = text;
@@ -32,13 +33,21 @@ function report(text: string, state: 'error' | 'success') {
 }
 function resetVerification() {
   token = '';
-  if (widget !== undefined) { try { globals.turnstile?.reset(widget); } catch { verification.textContent = copy.turnstile.unavailable; } }
+  if (widget !== undefined) {
+    try {
+      globals.turnstile?.reset(widget);
+    } catch {
+      verification.textContent = copy.turnstile.unavailable;
+    }
+  }
   syncButton();
 }
 function fieldError(name: 'fullName' | 'email' | 'message', text: string) {
   const field = form.elements.namedItem(name) as HTMLInputElement;
   const error = document.getElementById(`${name}-error`)!;
-  field.setAttribute('aria-invalid', 'true'); error.textContent = text; error.hidden = false;
+  field.setAttribute('aria-invalid', 'true');
+  error.textContent = text;
+  error.hidden = false;
 }
 function clearErrors() {
   for (const name of ['fullName', 'email', 'message']) {
@@ -58,7 +67,7 @@ for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-locale-li
       return;
     }
     const data = new FormData(form);
-    if (!Object.keys(inquiryLimits).some(name => data.get(name))) return;
+    if (!Object.keys(inquiryLimits).some((name) => data.get(name))) return;
     if (!saveDraft(form)) {
       event.preventDefault();
       report(copy.localeStorageUnavailable, 'error');
@@ -67,24 +76,50 @@ for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-locale-li
   });
 }
 function renderWidget() {
-  if (!globals.turnstile) { verification.textContent = copy.turnstile.loadFailed; return; }
+  if (!globals.turnstile) {
+    verification.textContent = copy.turnstile.loadFailed;
+    return;
+  }
   try {
     widget = globals.turnstile.render(form.querySelector<HTMLElement>('[data-turnstile]')!, {
-      sitekey: siteKey, action: 'product_inquiry', language: form.dataset.locale,
-      callback: (value: string) => { token = value; verification.textContent = ''; syncButton(); },
-      'expired-callback': () => { token = ''; verification.textContent = copy.turnstile.expired; syncButton(); },
-      'error-callback': () => { token = ''; verification.textContent = copy.turnstile.unavailable; syncButton(); },
-      'timeout-callback': () => { token = ''; verification.textContent = copy.turnstile.expired; syncButton(); },
+      sitekey: siteKey,
+      action: 'product_inquiry',
+      language: form.dataset.locale,
+      callback: (value: string) => {
+        token = value;
+        verification.textContent = '';
+        syncButton();
+      },
+      'expired-callback': () => {
+        token = '';
+        verification.textContent = copy.turnstile.expired;
+        syncButton();
+      },
+      'error-callback': () => {
+        token = '';
+        verification.textContent = copy.turnstile.unavailable;
+        syncButton();
+      },
+      'timeout-callback': () => {
+        token = '';
+        verification.textContent = copy.turnstile.expired;
+        syncButton();
+      },
     });
-  } catch { verification.textContent = copy.turnstile.unavailable; }
+  } catch {
+    verification.textContent = copy.turnstile.unavailable;
+  }
 }
 if (siteKey) {
   verification.textContent = copy.turnstile.unavailable;
   const script = document.createElement('script');
   script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-  script.async = true; script.defer = true;
+  script.async = true;
+  script.defer = true;
   script.addEventListener('load', renderWidget);
-  script.addEventListener('error', () => { verification.textContent = copy.turnstile.loadFailed; });
+  script.addEventListener('error', () => {
+    verification.textContent = copy.turnstile.loadFailed;
+  });
   document.head.append(script);
 }
 form.addEventListener('submit', async (event) => {
@@ -96,52 +131,110 @@ form.addEventListener('submit', async (event) => {
   const email = String(data.get('email') || '').trim();
   const message = String(data.get('message') || '').trim();
   let invalid = false;
-  if (!fullName) { fieldError('fullName', copy.errors.fullName.required); invalid = true; }
-  else if (fullName.length > inquiryLimits.fullName) { fieldError('fullName', copy.errors.fullName.tooLong); invalid = true; }
-  if (!email) { fieldError('email', copy.errors.email.required); invalid = true; }
-  else if (email.length > inquiryLimits.email) { fieldError('email', copy.errors.email.tooLong); invalid = true; }
-  else if (!(form.elements.namedItem('email') as HTMLInputElement).validity.valid) { fieldError('email', copy.errors.email.invalid); invalid = true; }
-  if (message.length > inquiryLimits.message) { fieldError('message', copy.errors.message.tooLong); invalid = true; }
-  if (invalid) { report(copy.errors.fieldSummary, 'error'); form.querySelector<HTMLElement>('[aria-invalid=true]')?.focus(); return; }
-  if (!token) { report(copy.errors.securitySummary, 'error'); return; }
-  pending = true; status.textContent = ''; syncButton();
+  if (!fullName) {
+    fieldError('fullName', copy.errors.fullName.required);
+    invalid = true;
+  } else if (fullName.length > inquiryLimits.fullName) {
+    fieldError('fullName', copy.errors.fullName.tooLong);
+    invalid = true;
+  }
+  if (!email) {
+    fieldError('email', copy.errors.email.required);
+    invalid = true;
+  } else if (email.length > inquiryLimits.email) {
+    fieldError('email', copy.errors.email.tooLong);
+    invalid = true;
+  } else if (!(form.elements.namedItem('email') as HTMLInputElement).validity.valid) {
+    fieldError('email', copy.errors.email.invalid);
+    invalid = true;
+  }
+  if (message.length > inquiryLimits.message) {
+    fieldError('message', copy.errors.message.tooLong);
+    invalid = true;
+  }
+  if (invalid) {
+    report(copy.errors.fieldSummary, 'error');
+    form.querySelector<HTMLElement>('[aria-invalid=true]')?.focus();
+    return;
+  }
+  if (!token) {
+    report(copy.errors.securitySummary, 'error');
+    return;
+  }
+  pending = true;
+  status.textContent = '';
+  syncButton();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
-      actions.inquiry({ fullName, email, message, website: String(data.get('website') || ''), turnstileToken: token, locale: form.dataset.locale as 'en' | 'es', ...getAttributionSnapshot() }),
-      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('RESPONSE_UNKNOWN')), 30_000); }),
+      actions.inquiry({
+        fullName,
+        email,
+        message,
+        website: String(data.get('website') || ''),
+        turnstileToken: token,
+        locale: form.dataset.locale as 'en' | 'es',
+        ...getAttributionSnapshot(),
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('RESPONSE_UNKNOWN')), 30_000);
+      }),
     ]);
     if (result.error) {
       if (isInputError(result.error)) {
-        for (const name of ['fullName', 'email', 'message'] as const) if (result.error.fields[name]) fieldError(name, copy.errors[name].invalid);
+        for (const name of ['fullName', 'email', 'message'] as const)
+          if (result.error.fields[name]) fieldError(name, copy.errors[name].invalid);
         report(copy.errors.fieldSummary, 'error');
       } else if (result.error.message.startsWith('{')) {
         let recognized = false;
         try {
           const details: unknown = JSON.parse(result.error.message);
-          if (details && typeof details === 'object' && 'code' in details && details.code === 'INQUIRY_VALIDATION_FAILED' && 'fields' in details && Array.isArray(details.fields)) {
-            for (const name of ['fullName', 'email', 'message'] as const) if (details.fields.includes(name)) fieldError(name, copy.errors[name].invalid);
+          if (
+            details &&
+            typeof details === 'object' &&
+            'code' in details &&
+            details.code === 'INQUIRY_VALIDATION_FAILED' &&
+            'fields' in details &&
+            Array.isArray(details.fields)
+          ) {
+            for (const name of ['fullName', 'email', 'message'] as const)
+              if (details.fields.includes(name)) fieldError(name, copy.errors[name].invalid);
             report(copy.errors.fieldSummary, 'error');
             recognized = true;
           }
-        } catch { /* Never render unrecognized server messages. */ }
+        } catch {
+          /* Never render unrecognized server messages. */
+        }
         if (!recognized) report(copy.unknown, 'error');
       } else if (result.error.message === 'RATE_LIMIT_EXCEEDED') {
         cooldownUntil = Date.now() + 60_000;
         report(copy.errors.rateLimitSummary, 'error');
-        setTimeout(() => { if (!pending && Date.now() >= cooldownUntil) { report(copy.errors.rateLimitReady, 'success'); syncButton(); } }, 60_000);
-      } else if (result.error.message === 'TURNSTILE_UNAVAILABLE') report(copy.turnstile.unavailable, 'error');
-      else if (result.error.message.startsWith('TURNSTILE_')) report(copy.errors.securitySummary, 'error');
-      else if (result.error.message === 'INQUIRY_VALIDATION_FAILED') report(copy.errors.fieldSummary, 'error');
+        setTimeout(() => {
+          if (!pending && Date.now() >= cooldownUntil) {
+            report(copy.errors.rateLimitReady, 'success');
+            syncButton();
+          }
+        }, 60_000);
+      } else if (result.error.message === 'TURNSTILE_UNAVAILABLE')
+        report(copy.turnstile.unavailable, 'error');
+      else if (result.error.message.startsWith('TURNSTILE_'))
+        report(copy.errors.securitySummary, 'error');
+      else if (result.error.message === 'INQUIRY_VALIDATION_FAILED')
+        report(copy.errors.fieldSummary, 'error');
       else report(copy.unknown, 'error');
-    } else if (result.data?.success === true && typeof result.data.referenceId === 'string' && /^INQ-[A-Za-z0-9-]+$/.test(result.data.referenceId)) {
+    } else if (
+      result.data?.success === true &&
+      typeof result.data.referenceId === 'string' &&
+      /^INQ-[A-Za-z0-9-]+$/.test(result.data.referenceId)
+    ) {
       report(`${copy.success} ${copy.referenceLabel}: ${result.data.referenceId}`, 'success');
       form.reset();
       clearDraft();
       document.dispatchEvent(new Event('inquiry:accepted'));
     } else report(copy.unknown, 'error');
-  } catch { report(copy.unknown, 'error'); }
-  finally {
+  } catch {
+    report(copy.unknown, 'error');
+  } finally {
     if (timer) clearTimeout(timer);
     pending = false;
     resetVerification();

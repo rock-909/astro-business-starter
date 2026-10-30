@@ -17,14 +17,14 @@ import {
   type ZodOptional,
   type ZodString,
   type ZodType,
-} from "astro/zod";
-import { type AttributionFieldName, CLICK_ID_PATTERN } from "./attribution";
-import { sanitizeMultilineText, sanitizePlainText } from "./text";
-import { inquiryLimits } from "./inquiry-limits";
-const LOCALES_CONFIG = { locales: ["en", "es"] as const };
+} from 'astro/zod';
+import { type AttributionFieldName, CLICK_ID_PATTERN } from './attribution';
+import { sanitizeMultilineText, sanitizePlainText } from './text';
+import { inquiryLimits } from './inquiry-limits';
+const LOCALES_CONFIG = { locales: ['en', 'es'] as const };
 const hasSpreadsheetFormulaPrefix = (value: string) => /^[=+\-@]/.test(value);
 
-export const INQUIRY_LEAD_TYPE = "inquiry" as const;
+export const INQUIRY_LEAD_TYPE = 'inquiry' as const;
 
 const sanitizedString = () => string().overwrite(sanitizePlainText);
 const MAX_ATTRIBUTION_FIELD_LENGTH = 256;
@@ -46,10 +46,10 @@ function normalizeOptionalInput(value: unknown): unknown {
   if (value === undefined) {
     return undefined;
   }
-  if (typeof value === "string" && value.trim().length === 0) {
+  if (typeof value === 'string' && value.trim().length === 0) {
     return undefined;
   }
-  return typeof value === "string" ? value.trim() : value;
+  return typeof value === 'string' ? value.trim() : value;
 }
 
 // 在 zod 默认邮箱正则基础上只放宽浏览器 type="email" 接受的两类：
@@ -61,10 +61,7 @@ const BUYER_EMAIL_PATTERN =
 const buyerMessageSchema: ZodType<string | undefined> = unknown()
   .transform(normalizeOptionalInput)
   .pipe(
-    union([
-      zUndefined(),
-      string().overwrite(sanitizeMultilineText).max(inquiryLimits.message),
-    ]),
+    union([zUndefined(), string().overwrite(sanitizeMultilineText).max(inquiryLimits.message)]),
   );
 
 export const inquiryLeadSchema = object({
@@ -85,4 +82,3 @@ export const inquiryLeadSchema = object({
 export type InquiryLeadInput = ZodOutput<typeof inquiryLeadSchema>;
 
 export type ValidatedInquiry = InquiryLeadInput & { referenceId: string };
-
