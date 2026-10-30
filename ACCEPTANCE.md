@@ -19,6 +19,18 @@ Post-audit source verified on **2026-10-25 UTC**. These are local/mock results, 
 
 The audit fixes environment/readiness and optional company configuration, current-URL locale navigation, active input contrast and analytics referrer cleaning. A separately approved policy change gates attribution by analytics/advertising consent while keeping inquiry available without either. Local cleanup consolidates form limits, removes unused content/message fields, simplifies a guarded IPv6 segment parser and improves source formatting. No provider framework, queue, automatic retry or idempotency mechanism was added. The source archive contains runnable tests and a SHA-256 file manifest, not internal execution logs, dependencies, screenshots or build outputs.
 
+## Prettier format check (2026-10-29 UTC)
+
+| Check | Result |
+|---|---|
+| `npm run format:check` after `npm ci` | PASS — exit 0, all matched files use Prettier code style |
+| Unformatted counterexample (`export const  x={a:1}` appended to `src/lib/text.ts`, then reverted) | Expected exit 1 — `prettier --check .` reports the file |
+| `.astro` parsing | `prettier --file-info src/layouts/SiteLayout.astro` infers the `astro` parser from `prettier-plugin-astro` |
+| `npm run check` | PASS — 0 errors, warnings or hints |
+| Reference search (`git grep format:check prettier`) | `package.json` scripts and devDependencies, `prettier.config.mjs`, `.github/workflows/ci.yml` step `Format check`, `.no-mistakes.yaml` `lint`, `.claude/rules/testing-runtime.md` command table |
+
+Markdown, YAML, `.claude/` and the lockfile are excluded by `.prettierignore`. The reformat commit is mechanical `prettier --write .` output; the build, node and browser regression results for it come from the `verify` run, not from this section.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.
