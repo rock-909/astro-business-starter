@@ -30,8 +30,11 @@ function captureParams(): MarketingAttributionFields {
   const params: MarketingAttributionFields = {};
   if (consent.analytics) {
     for (const [field, parameter] of [
-      ['utmSource', 'utm_source'], ['utmMedium', 'utm_medium'],
-      ['utmCampaign', 'utm_campaign'], ['utmTerm', 'utm_term'], ['utmContent', 'utm_content'],
+      ['utmSource', 'utm_source'],
+      ['utmMedium', 'utm_medium'],
+      ['utmCampaign', 'utm_campaign'],
+      ['utmTerm', 'utm_term'],
+      ['utmContent', 'utm_content'],
     ] as const) {
       const value = sanitize(field, search.get(parameter));
       if (value) params[field] = value;
@@ -61,14 +64,19 @@ export function getAttributionSnapshot(): MarketingAttributionFields {
         if (value) stored[field] = value;
       }
     }
-  } catch { /* Storage denial must not block an inquiry. */ }
+  } catch {
+    /* Storage denial must not block an inquiry. */
+  }
 
   const current = captureParams();
   // Each consent category keeps its own first permitted touch.
-  const hasAnalytics = Object.keys(stored).some(field => !isClickIdField(field as AttributionFieldName));
-  const hasAdvertising = CLICK_ID_FIELD_NAMES.some(field => stored[field]);
+  const hasAnalytics = Object.keys(stored).some(
+    (field) => !isClickIdField(field as AttributionFieldName),
+  );
+  const hasAdvertising = CLICK_ID_FIELD_NAMES.some((field) => stored[field]);
   for (const field of ATTRIBUTION_FIELD_NAMES) {
-    if (current[field] && !(isClickIdField(field) ? hasAdvertising : hasAnalytics)) stored[field] = current[field];
+    if (current[field] && !(isClickIdField(field) ? hasAdvertising : hasAnalytics))
+      stored[field] = current[field];
   }
   return stored;
 }
@@ -79,5 +87,7 @@ export function applyAttributionConsent(next: AttributionConsent): void {
   try {
     if (Object.keys(data).length) sessionStorage.setItem(storageKey, JSON.stringify(data));
     else sessionStorage.removeItem(storageKey);
-  } catch { /* The current consent still filters submission when storage is unavailable. */ }
+  } catch {
+    /* The current consent still filters submission when storage is unavailable. */
+  }
 }

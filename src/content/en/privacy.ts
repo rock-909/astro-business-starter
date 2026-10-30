@@ -1,12 +1,12 @@
-import type { ContentPage } from "../../site";
+import type { ContentPage } from '../../site';
 
 const privacyPage = {
   metadata: {
-    title: "Privacy policy — to be completed",
-    updatedAt: "2026-08-06",
+    title: 'Privacy policy — to be completed',
+    updatedAt: '2026-08-06',
     seo: {
-      title: "Privacy policy — to be completed",
-      description: "Incomplete placeholder. The site operator must replace this before launch.",
+      title: 'Privacy policy — to be completed',
+      description: 'Incomplete placeholder. The site operator must replace this before launch.',
     },
   },
   content: String.raw`
@@ -19,4 +19,3 @@ Replace this placeholder with a policy reviewed for the actual business and appl
 } satisfies ContentPage;
 
 export default privacyPage;
-

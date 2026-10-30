@@ -20,6 +20,7 @@ paths:
 | 验证目的 | 现有命令 |
 | --- | --- |
 | Astro/应用类型 | `npm run check` |
+| 代码格式（Prettier） | `npm run format:check` |
 | 生成离线测试用构建 | `npm run build:test` |
 | 已构建 Worker 的契约 | `npm test` |
 | 浏览器旅程 | `npm run test:browser` |

@@ -35,6 +35,8 @@ npm test
 npm run test:browser
 ```
 
+代码格式由 Prettier 检查，不在 `verify` 内：`npm run format` 改写格式，`npm run format:check` 只检查；CI 在 `verify` 前运行后者。
+
 验证结果和明确未验证的范围见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 
 ## 派生站点改哪里

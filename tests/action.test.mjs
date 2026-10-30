@@ -2,13 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parse } from 'devalue';
 import { readFileSync, readdirSync } from 'node:fs';
-import {
-  startHarness,
-  action,
-  validInput,
-  deliveries,
-  fixtureEnv,
-} from './harness.mjs';
+import { startHarness, action, validInput, deliveries, fixtureEnv } from './harness.mjs';
 import { readinessIssues } from '../scripts/readiness.mjs';
 import {
   ipv4ToInteger,
@@ -69,10 +63,7 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
         assert.match(email.subject, new RegExp(result.referenceId));
         assert.equal(airtable['First Name'], "'=Alex");
         assert.equal(airtable['Last Name'], 'Buyer');
-        assert.equal(
-          airtable.Requirements,
-          '\'=SUM(A1)\nwidth < 900mm & "quoted"\n\nlast',
-        );
+        assert.equal(airtable.Requirements, '\'=SUM(A1)\nwidth < 900mm & "quoted"\n\nlast');
         assert.match(email.html, /width &lt; 900mm &amp; &quot;quoted&quot;/);
         assert.match(email.text, /Language: Español/);
         assert.match(email.text, /gclid: Click_123/);
@@ -143,8 +134,7 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
           unknown: true,
         });
         assert.equal(response.status, 200);
-        const fields = JSON.parse(deliveries(h.state)[1].body).records[0]
-          .fields;
+        const fields = JSON.parse(deliveries(h.state)[1].body).records[0].fields;
         assert.equal(fields.Requirements, undefined);
         assert.equal(fields['UTM Source'], undefined);
         assert.equal(fields['UTM Campaign'], undefined);
@@ -230,69 +220,53 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
       },
     );
 
-    await suite.test(
-      'declared lengths cannot bypass the actual 65536-byte boundary',
-      async () => {
-        const empty = JSON.stringify({ ...validInput, padding: '' });
-        const body = JSON.stringify({
-          ...validInput,
-          padding: 'x'.repeat(65536 - Buffer.byteLength(empty)),
-        });
-        assert.equal(Buffer.byteLength(body), 65536);
-        for (const declared of [undefined, '65536', '2', '-1', 'NaN']) {
-          reset();
-          const headers =
-            declared === undefined ? {} : { 'x-test-content-length': declared };
-          const response = await action(h, body, { headers });
-          assert.equal(
-            response.status,
-            200,
-            `accepted boundary; declared ${declared}`,
-          );
-          assert.equal(deliveries(h.state).length, 2);
-        }
-        for (const declared of [undefined, '65537', '2', '0', '-1', 'NaN']) {
-          reset();
-          const headers =
-            declared === undefined ? {} : { 'x-test-content-length': declared };
-          const response = await action(h, body + ' ', { headers });
-          assert.equal(
-            response.status,
-            413,
-            `oversized body; declared ${declared}`,
-          );
-          assert.equal(h.state.calls.length, 0);
-        }
-      },
-    );
+    await suite.test('declared lengths cannot bypass the actual 65536-byte boundary', async () => {
+      const empty = JSON.stringify({ ...validInput, padding: '' });
+      const body = JSON.stringify({
+        ...validInput,
+        padding: 'x'.repeat(65536 - Buffer.byteLength(empty)),
+      });
+      assert.equal(Buffer.byteLength(body), 65536);
+      for (const declared of [undefined, '65536', '2', '-1', 'NaN']) {
+        reset();
+        const headers = declared === undefined ? {} : { 'x-test-content-length': declared };
+        const response = await action(h, body, { headers });
+        assert.equal(response.status, 200, `accepted boundary; declared ${declared}`);
+        assert.equal(deliveries(h.state).length, 2);
+      }
+      for (const declared of [undefined, '65537', '2', '0', '-1', 'NaN']) {
+        reset();
+        const headers = declared === undefined ? {} : { 'x-test-content-length': declared };
+        const response = await action(h, body + ' ', { headers });
+        assert.equal(response.status, 413, `oversized body; declared ${declared}`);
+        assert.equal(h.state.calls.length, 0);
+      }
+    });
 
-    await suite.test(
-      'edge IP rate buckets retain IPv6 /64 and mapped IPv4 semantics',
-      async () => {
-        const keys = [];
-        for (const ip of [
-          '2001:db8:1234:5678::1',
-          '2001:0DB8:1234:5678:ffff::99',
-          '2001:db8:1234:5679::1',
-          '203.0.113.20',
-          '::ffff:203.0.113.20',
-        ]) {
-          reset();
-          const response = await action(
-            h,
-            { website: 'bot' },
-            { headers: { 'cf-connecting-ip': ip } },
-          );
-          assert.equal(response.status, 200);
-          const key = JSON.parse(h.state.calls[0].body)[0][1];
-          assert.ok(!key.includes(ip));
-          keys.push(key);
-        }
-        assert.equal(keys[0], keys[1]);
-        assert.notEqual(keys[1], keys[2]);
-        assert.equal(keys[3], keys[4]);
-      },
-    );
+    await suite.test('edge IP rate buckets retain IPv6 /64 and mapped IPv4 semantics', async () => {
+      const keys = [];
+      for (const ip of [
+        '2001:db8:1234:5678::1',
+        '2001:0DB8:1234:5678:ffff::99',
+        '2001:db8:1234:5679::1',
+        '203.0.113.20',
+        '::ffff:203.0.113.20',
+      ]) {
+        reset();
+        const response = await action(
+          h,
+          { website: 'bot' },
+          { headers: { 'cf-connecting-ip': ip } },
+        );
+        assert.equal(response.status, 200);
+        const key = JSON.parse(h.state.calls[0].body)[0][1];
+        assert.ok(!key.includes(ip));
+        keys.push(key);
+      }
+      assert.equal(keys[0], keys[1]);
+      assert.notEqual(keys[1], keys[2]);
+      assert.equal(keys[3], keys[4]);
+    });
 
     await suite.test(
       'true overlimit returns Retry-After; store outage continues Turnstile (not bypass)',
@@ -390,11 +364,7 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
           assert.equal(response.status, status);
           assert.equal(started, 2);
           assert.equal(deliveries(h.state).length, 2);
-          if (status === 503)
-            assert.equal(
-              (await data(response)).message,
-              'DELIVERY_UNCONFIRMED',
-            );
+          if (status === 503) assert.equal((await data(response)).message, 'DELIVERY_UNCONFIRMED');
         }
       },
     );
@@ -453,14 +423,10 @@ test('static assets, SEO endpoints, health, 404 and client secret boundary', asy
       assert.equal((html.match(/<main\b/g) || []).length, 1);
       assert.match(html, /rel="canonical"/);
     }
-    const sitemap = await (
-      await h.mf.dispatchFetch('http://localhost/sitemap.xml')
-    ).text();
+    const sitemap = await (await h.mf.dispatchFetch('http://localhost/sitemap.xml')).text();
     assert.equal((sitemap.match(/<url>/g) || []).length, 4);
     assert.doesNotMatch(sitemap, /privacy|terms|\/en\//);
-    const llms = await (
-      await h.mf.dispatchFetch('http://localhost/llms.txt')
-    ).text();
+    const llms = await (await h.mf.dispatchFetch('http://localhost/llms.txt')).text();
     assert.doesNotMatch(llms, /\/privacy|\/terms/);
     assert.match(llms, /Español/);
     assert.match(
@@ -470,9 +436,7 @@ test('static assets, SEO endpoints, health, 404 and client secret boundary', asy
     const health = await h.mf.dispatchFetch('http://localhost/api/health');
     assert.equal(health.headers.get('cache-control'), 'no-store');
     assert.deepEqual(await health.json(), { status: 'ok' });
-    const security = await h.mf.dispatchFetch(
-      'http://localhost/security-policy.txt',
-    );
+    const security = await h.mf.dispatchFetch('http://localhost/security-policy.txt');
     assert.equal(security.status, 404);
     assert.equal(await security.text(), '');
     const og = await h.mf.dispatchFetch('http://localhost/opengraph-image.png');
@@ -485,12 +449,7 @@ test('static assets, SEO endpoints, health, 404 and client secret boundary', asy
     const icon = await h.mf.dispatchFetch('http://localhost/icon.svg');
     assert.equal(icon.status, 200);
     assert.match(icon.headers.get('content-type'), /^image\/svg\+xml/);
-    for (const path of [
-      '/missing',
-      '/en/contact',
-      '/products',
-      '/es/missing',
-    ]) {
+    for (const path of ['/missing', '/en/contact', '/products', '/es/missing']) {
       const response = await h.mf.dispatchFetch(`http://localhost${path}`);
       assert.equal(response.status, 404);
     }
@@ -501,14 +460,8 @@ test('static assets, SEO endpoints, health, 404 and client secret boundary', asy
     for (const [key, value] of Object.entries(fixtureEnv).filter(([key]) =>
       /SECRET|TOKEN|API_KEY|PEPPER/.test(key),
     )) {
-      assert.ok(
-        !client.includes(value),
-        `${key} must not appear in client assets`,
-      );
-      assert.ok(
-        !client.includes(key),
-        `${key} binding name must not enter browser code`,
-      );
+      assert.ok(!client.includes(value), `${key} must not appear in client assets`);
+      assert.ok(!client.includes(key), `${key} binding name must not enter browser code`);
     }
     assert.equal(h.state.calls.length, 0);
   } finally {
@@ -587,11 +540,7 @@ test('IP parsing retains strict segments, compression and embedded IPv4', () => 
     '\0',
     '1\t',
   ]) {
-    assert.equal(
-      ipv6ToBigInt(`0:0:0:0:0:0:0:${segment}`),
-      null,
-      JSON.stringify(segment),
-    );
+    assert.equal(ipv6ToBigInt(`0:0:0:0:0:0:0:${segment}`), null, JSON.stringify(segment));
   }
   assert.equal(ipv6ToBigInt('::'), 0n);
   assert.equal(ipv6ToBigInt('1::2::3'), null);
@@ -600,14 +549,8 @@ test('IP parsing retains strict segments, compression and embedded IPv4', () => 
   assert.equal(ipv4ToInteger('203.0.113.20'), 3405803796);
   for (const ip of ['203.00.113.20', '256.0.0.1', '1.2.3', '1.2.3.4x'])
     assert.equal(ipv4ToInteger(ip), null);
-  assert.equal(
-    ipv4MappedEmbeddedAddress('::ffff:203.0.113.20'),
-    ipv4ToInteger('203.0.113.20'),
-  );
-  assert.equal(
-    ipv4MappedEmbeddedAddress('::ffff:cb00:7114'),
-    ipv4ToInteger('203.0.113.20'),
-  );
+  assert.equal(ipv4MappedEmbeddedAddress('::ffff:203.0.113.20'), ipv4ToInteger('203.0.113.20'));
+  assert.equal(ipv4MappedEmbeddedAddress('::ffff:cb00:7114'), ipv4ToInteger('203.0.113.20'));
   assert.equal(ipv4MappedEmbeddedAddress('2001:db8::1'), null);
   assert.equal(
     ipv6NetworkPrefix64('2001:db8:1234:5678::1'),
@@ -616,20 +559,14 @@ test('IP parsing retains strict segments, compression and embedded IPv4', () => 
 });
 
 test('static hosting and dynamic Worker security headers remain identical', () => {
-  const staticPolicy = readFileSync(
-    new URL('../public/_headers', import.meta.url),
-    'utf8',
-  )
+  const staticPolicy = readFileSync(new URL('../public/_headers', import.meta.url), 'utf8')
     .split('/_astro/*')[0]
     .trim()
     .split('\n')
     .slice(1)
     .map((line) => {
       const separator = line.indexOf(':');
-      return [
-        line.slice(0, separator).trim(),
-        line.slice(separator + 1).trim(),
-      ];
+      return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
     });
   assert.deepEqual(Object.fromEntries(staticPolicy), securityHeaders);
 });

@@ -9,18 +9,18 @@ const EXPLICIT_ID_PATTERN = /\s*\\?\{#([a-z0-9-]+)\\?\}\s*$/;
 
 function slugifyHeading(text: string): string {
   const trimmed = text.trim();
-  if (trimmed === "") {
-    return "";
+  if (trimmed === '') {
+    return '';
   }
 
   // 只去掉拉丁字母上的重音；其他文字的组合符号（假名浊点、天城文元音符）属于字母本身。
   return trimmed
-    .normalize("NFD")
-    .replace(/(\p{Script=Latin})\p{M}+/gu, "$1")
-    .normalize("NFC")
+    .normalize('NFD')
+    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+    .normalize('NFC')
     .toLowerCase()
-    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, "")
-    .replace(/\s+/g, "-");
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-');
 }
 
 export function parseHeadingId(text: string): {
@@ -31,9 +31,8 @@ export function parseHeadingId(text: string): {
   if (match) {
     return {
       displayText: text.slice(0, match.index).trim(),
-      id: match[1] ?? "",
+      id: match[1] ?? '',
     };
   }
   return { displayText: text, id: slugifyHeading(text) };
 }
-

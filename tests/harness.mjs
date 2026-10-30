@@ -99,27 +99,17 @@ export async function startHarness({ port = 0, bindings = {} } = {}) {
           at: Date.now(),
         };
         state.calls.push(call);
-        if (
-          url.origin === 'https://rate-limit.invalid' &&
-          url.pathname === '/multi-exec'
-        ) {
-          if (state.rate === 'throw')
-            throw new Error('fixture boundary unavailable');
+        if (url.origin === 'https://rate-limit.invalid' && url.pathname === '/multi-exec') {
+          if (state.rate === 'throw') throw new Error('fixture boundary unavailable');
           if (state.rate === 'malformed') return json({ bad: true });
-          return json([
-            { result: state.rateCount },
-            { result: 1 },
-            { result: state.rateTtl },
-          ]);
+          return json([{ result: state.rateCount }, { result: 1 }, { result: state.rateTtl }]);
         }
         if (
           url.origin === 'https://challenges.cloudflare.com' &&
           url.pathname === '/turnstile/v0/siteverify'
         ) {
-          if (state.turnstile === 'throw')
-            throw new Error('fixture boundary unavailable');
-          if (state.turnstile === 'malformed')
-            return new MFResponse('bad json');
+          if (state.turnstile === 'throw') throw new Error('fixture boundary unavailable');
+          if (state.turnstile === 'malformed') return new MFResponse('bad json');
           if (state.turnstile === 'reject')
             return json({
               success: false,
@@ -132,17 +122,12 @@ export async function startHarness({ port = 0, bindings = {} } = {}) {
             ...(state.turnstile !== 'missing-host'
               ? {
                   hostname:
-                    state.turnstile === 'wrong-host'
-                      ? 'attacker.invalid'
-                      : 'example.invalid',
+                    state.turnstile === 'wrong-host' ? 'attacker.invalid' : 'example.invalid',
                 }
               : {}),
             ...(state.turnstile !== 'missing-action'
               ? {
-                  action:
-                    state.turnstile === 'wrong-action'
-                      ? 'other_action'
-                      : 'product_inquiry',
+                  action: state.turnstile === 'wrong-action' ? 'other_action' : 'product_inquiry',
                 }
               : {}),
           });
@@ -150,31 +135,20 @@ export async function startHarness({ port = 0, bindings = {} } = {}) {
         const provider =
           url.origin === 'https://api.resend.com' && url.pathname === '/emails'
             ? 'email'
-            : url.origin === 'https://api.airtable.com' &&
-                url.pathname === '/v0/appFixture/Leads'
+            : url.origin === 'https://api.airtable.com' && url.pathname === '/v0/appFixture/Leads'
               ? 'airtable'
               : null;
-        if (!provider)
-          throw new Error(
-            'Unexpected outbound request blocked by test harness',
-          );
+        if (!provider) throw new Error('Unexpected outbound request blocked by test harness');
         if (state.onDelivery) await state.onDelivery(provider);
-        if (state.delay)
-          await new Promise((resolve) => setTimeout(resolve, state.delay));
-        if (state[provider] === 'throw')
-          throw new Error('fixture response lost after acceptance');
-        if (state[provider] === 'reject')
-          return json({ error: 'rejected' }, 503);
+        if (state.delay) await new Promise((resolve) => setTimeout(resolve, state.delay));
+        if (state[provider] === 'throw') throw new Error('fixture response lost after acceptance');
+        if (state[provider] === 'reject') return json({ error: 'rejected' }, 503);
         if (state[provider] === 'missing-id')
           return json(provider === 'email' ? {} : { records: [{}] });
         if (state[provider] === 'blank-id')
-          return json(
-            provider === 'email' ? { id: ' ' } : { records: [{ id: ' ' }] },
-          );
+          return json(provider === 'email' ? { id: ' ' } : { records: [{ id: ' ' }] });
         return json(
-          provider === 'email'
-            ? { id: 'fixture-email-id' }
-            : { records: [{ id: 'recFixture' }] },
+          provider === 'email' ? { id: 'fixture-email-id' } : { records: [{ id: 'recFixture' }] },
         );
       },
     }),
@@ -192,23 +166,18 @@ export const validInput = {
 };
 export async function action(harness, payload = validInput, options = {}) {
   const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  return harness.mf.dispatchFetch(
-    `http://localhost${options.path || '/_actions/inquiry'}`,
-    {
-      method: 'POST',
-      headers: {
-        origin: 'http://localhost',
-        'content-type': 'application/json',
-        'cf-connecting-ip': '203.0.113.20',
-        ...options.headers,
-      },
-      body,
-      ...options.init,
+  return harness.mf.dispatchFetch(`http://localhost${options.path || '/_actions/inquiry'}`, {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost',
+      'content-type': 'application/json',
+      'cf-connecting-ip': '203.0.113.20',
+      ...options.headers,
     },
-  );
+    body,
+    ...options.init,
+  });
 }
 export function deliveries(state) {
-  return state.calls.filter((call) =>
-    /api\.(resend|airtable)\.com/.test(call.url),
-  );
+  return state.calls.filter((call) => /api\.(resend|airtable)\.com/.test(call.url));
 }

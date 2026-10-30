@@ -1,11 +1,12 @@
 # no-mistakes 门禁配置（仅从默认分支读取）。
 # 审查由 GPT-6 Astra（中档）经 Codex 执行，由操作者全局配置的 review_agents.reviewer 指定；其余步骤均由 Claude 执行。
 # 模型与推理档位在操作者的全局 no-mistakes 配置中设定，不在本文件。
-# 未设 lint：本项目没有 lint/format 脚本；`npm run check` 在全新 `npm ci` 副本中缺少 @emnapi/runtime，会弹出安装提示并以 0 退出而未做检查，不能作为门禁。
+# lint 运行类型检查 `npm run check` 与 Prettier 格式检查 `npm run format:check`。
 agent: claude
 
 commands:
   prepare: "npm ci"
+  lint: "npm run check && npm run format:check"
 
 review:
   path_instructions:

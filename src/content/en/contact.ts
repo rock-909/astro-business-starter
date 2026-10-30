@@ -1,13 +1,13 @@
-import type { ContentPage } from "../../site";
+import type { ContentPage } from '../../site';
 
 const contactPage = {
   metadata: {
-    title: "Contact",
-    updatedAt: "2026-08-06",
+    title: 'Contact',
+    updatedAt: '2026-08-06',
     seo: {
-      title: "Contact — Inquiry Site Reference",
+      title: 'Contact — Inquiry Site Reference',
       description:
-        "Reference contact page showing the minimum information a future business should replace.",
+        'Reference contact page showing the minimum information a future business should replace.',
     },
   },
   content: String.raw`
@@ -16,4 +16,3 @@ Use the **[inquiry form](/contact#inquiry)** below. This reference site is not r
 } satisfies ContentPage;
 
 export default contactPage;
-

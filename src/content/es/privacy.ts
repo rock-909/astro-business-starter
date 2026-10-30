@@ -1,12 +1,13 @@
-import type { ContentPage } from "../../site";
+import type { ContentPage } from '../../site';
 
 const privacyPage = {
   metadata: {
-    title: "Privacidad — pendiente de completar",
-    updatedAt: "2026-08-06",
+    title: 'Privacidad — pendiente de completar',
+    updatedAt: '2026-08-06',
     seo: {
-      title: "Privacidad — pendiente de completar",
-      description: "Texto provisional incompleto. El responsable debe sustituirlo antes del lanzamiento.",
+      title: 'Privacidad — pendiente de completar',
+      description:
+        'Texto provisional incompleto. El responsable debe sustituirlo antes del lanzamiento.',
     },
   },
   content: String.raw`
@@ -19,4 +20,3 @@ Sustituye este texto provisional por una política revisada para la actividad re
 } satisfies ContentPage;
 
 export default privacyPage;
-

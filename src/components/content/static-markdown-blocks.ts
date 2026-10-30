@@ -9,29 +9,29 @@
  * **加粗** 段落，以及行内加粗与链接（站内路径和 http(s) 网址，InlineMarkdown）。
  */
 
-import { parseHeadingId } from "./heading-id";
+import { parseHeadingId } from './heading-id';
 
 const BOLD_WRAPPER_LENGTH = 2;
 
 export type StaticMarkdownBlock =
   | {
-      kind: "heading";
-      level: "h2" | "h3";
+      kind: 'heading';
+      level: 'h2' | 'h3';
       displayText: string;
       id: string;
     }
   | {
-      kind: "paragraph";
+      kind: 'paragraph';
       text: string;
       emphasized: boolean;
     }
   | {
-      kind: "list";
+      kind: 'list';
       ordered: boolean;
       items: readonly string[];
     }
   | {
-      kind: "table";
+      kind: 'table';
       headers: readonly string[];
       rows: readonly (readonly string[])[];
     };
@@ -49,7 +49,7 @@ interface ParseState {
 function parseTableRow(line: string): string[] {
   return line
     .slice(1, -1)
-    .split("|")
+    .split('|')
     .map((cell) => cell.trim());
 }
 
@@ -60,7 +60,7 @@ function isTableSeparator(cells: string[]): boolean {
 function flushList(state: ParseState): void {
   if (state.listItems.length > 0) {
     state.blocks.push({
-      kind: "list",
+      kind: 'list',
       ordered: state.listOrdered === true,
       items: state.listItems,
     });
@@ -73,7 +73,7 @@ function flushTable(state: ParseState): void {
   // 与既有行为一致：缺 header 或缺 body 的残表整体丢弃。
   if (state.tableRows.length > 0 && state.tableHeaders.length > 0) {
     state.blocks.push({
-      kind: "table",
+      kind: 'table',
       headers: state.tableHeaders,
       rows: state.tableRows,
     });
@@ -84,7 +84,7 @@ function flushTable(state: ParseState): void {
 }
 
 function handleTableLine(state: ParseState, trimmed: string): boolean {
-  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
     return false;
   }
 
@@ -106,7 +106,7 @@ function handleTableLine(state: ParseState, trimmed: string): boolean {
 
 function handleListLine(state: ParseState, trimmed: string): boolean {
   const orderedMatch = /^(\d+)\.\s/.exec(trimmed);
-  const isUnordered = trimmed.startsWith("- ");
+  const isUnordered = trimmed.startsWith('- ');
 
   let text: string;
   let ordered: boolean;
@@ -134,50 +134,48 @@ function handleListLine(state: ParseState, trimmed: string): boolean {
 function handleHeadingLine(
   state: ParseState,
   trimmed: string,
-  spec: { level: "h2" | "h3"; prefixLength: number },
+  spec: { level: 'h2' | 'h3'; prefixLength: number },
 ): void {
   const raw = trimmed.slice(spec.prefixLength).trim();
   const { displayText, id: parsedId } = parseHeadingId(raw);
   // 同名标题追加序号，保证页面内 id 和目录锚点唯一。
-  const baseId = parsedId || "section";
+  const baseId = parsedId || 'section';
   let id = baseId;
   for (let n = 2; state.usedHeadingIds.has(id); n += 1) {
     id = `${baseId}-${n}`;
   }
   state.usedHeadingIds.add(id);
-  state.blocks.push({ kind: "heading", level: spec.level, displayText, id });
+  state.blocks.push({ kind: 'heading', level: spec.level, displayText, id });
 }
 
 function handleTextLine(state: ParseState, trimmed: string): void {
   flushList(state);
   flushTable(state);
 
-  if (trimmed.startsWith("## ")) {
-    handleHeadingLine(state, trimmed, { level: "h2", prefixLength: 3 });
+  if (trimmed.startsWith('## ')) {
+    handleHeadingLine(state, trimmed, { level: 'h2', prefixLength: 3 });
     return;
   }
 
-  if (trimmed.startsWith("### ")) {
-    handleHeadingLine(state, trimmed, { level: "h3", prefixLength: 4 });
+  if (trimmed.startsWith('### ')) {
+    handleHeadingLine(state, trimmed, { level: 'h3', prefixLength: 4 });
     return;
   }
 
-  if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
+  if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
     state.blocks.push({
-      kind: "paragraph",
+      kind: 'paragraph',
       text: trimmed.slice(BOLD_WRAPPER_LENGTH, -BOLD_WRAPPER_LENGTH),
       emphasized: true,
     });
     return;
   }
 
-  state.blocks.push({ kind: "paragraph", text: trimmed, emphasized: false });
+  state.blocks.push({ kind: 'paragraph', text: trimmed, emphasized: false });
 }
 
 /** 把静态 markdown 文本解析成块序列（纯函数，供渲染与 TOC 共用）。 */
-export function parseStaticMarkdownBlocks(
-  content: string,
-): readonly StaticMarkdownBlock[] {
+export function parseStaticMarkdownBlocks(content: string): readonly StaticMarkdownBlock[] {
   const state: ParseState = {
     blocks: [],
     listItems: [],
@@ -188,10 +186,10 @@ export function parseStaticMarkdownBlocks(
     usedHeadingIds: new Set(),
   };
 
-  for (const line of content.split("\n")) {
+  for (const line of content.split('\n')) {
     const trimmed = line.trim();
 
-    if (trimmed === "") {
+    if (trimmed === '') {
       flushList(state);
       if (!state.inTable) {
         flushTable(state);
@@ -219,4 +217,3 @@ export function parseStaticMarkdownBlocks(
 
   return state.blocks;
 }
-
