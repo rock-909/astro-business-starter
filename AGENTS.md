@@ -21,6 +21,7 @@ Astro Business Starter 是 Astro + Cloudflare 的英/西语企业网站底座，
 | UI、语言切换、无障碍和同意状态 | `.claude/rules/ui-i18n-consent.md` |
 | 站点身份、内容、schema、SEO 和上线前提 | `.claude/rules/content-config.md` |
 | 本地测试、workerd 证据与验证命令 | `.claude/rules/testing-runtime.md` |
+| 依赖升级、版本策略、冷却期与例外 | `.claude/rules/dependencies.md` |
 
 Claude Code 可按 `paths` 自动加载匹配规则；在 Codex 或其他不提供该机制的工具中，执行本索引指令主动打开匹配文件。不要假定 `.claude/rules/` 会被 Codex 自动加载，不要复制出第二套正文。
 
