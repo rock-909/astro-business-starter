@@ -14,8 +14,8 @@ paths:
 - **MUST** `check` 与 build 分开：Astro 编译成功不代表 TypeScript 检查通过。当前 `tsconfig` 不检查所有测试/脚本，不能把 `check` 描述为全仓类型证明。
 - **MUST** workerd 测试使用当前锁定 Wrangler 附带的 Miniflare 和真实 `dist/server/entry.mjs`；Mock 只放在外部网络边界，未登记外连失败。不能用自己重写的 handler 证明 Action。
 - **MUST** 使用新鲜测试构建；会写同一 `dist` 的构建与读取它的测试串行。浏览器测试若复用已有服务，先确认它服务当前构建，不能把旧进程的绿灯算进本次结果。
-- **DEFAULT** 纯逻辑用最小真实函数测试，Action 用现有 harness，跨页面/焦点/存储交互用 Playwright。断言行为和独立期望，不复制实现、不依赖固定 sleep，不增加新测试框架。
-- **MUST** 修改验证逻辑时含一个能被错误实现触发的反例；拒绝无效配置须测试真实 validator，provider mock 的成功不能替代业务校验或真实送达证明。
+- **DEFAULT** 纯逻辑用最小真实函数测试，Action 用现有 harness，跨页面/焦点/存储交互用 Playwright，优先用角色/标签等用户可见定位。断言行为和独立期望，不复制实现、不依赖固定 sleep，不增加新测试框架。
+- **MUST** 修改验证逻辑时含一个能被错误实现触发的反例；拒绝无效配置须测试真实 validator，provider mock 的成功不能替代业务校验或真实送达证明。删除或替换某项检查前，证明替代者覆盖同一失败模式、确实在 `verify`/CI 中运行且失败即阻断。
 
 | 验证目的 | 现有命令 |
 | --- | --- |

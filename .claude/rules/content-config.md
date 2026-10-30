@@ -16,8 +16,8 @@ paths:
 
 - **MUST** 单一作者源：身份事实在 `site-data.json`；界面文字在 `content/{locale}/messages.json`；页面正文/元信息在对应 locale 的页面模块；路由和 locale 表在 `site.ts`。派生内容不能成为第二份可编辑事实。
 - **MUST** JSON→可信配置时 schema 覆盖所有实际消费字段，并使用 parse 返回值及其推导类型；不能以 `as Site`、手写平行接口或只检查部分字段来证明整体有效。区分可缺省字段与缺失后会崩溃的字段。
-- **MUST** EN 默认不加前缀，ES 使用 `/es`；canonical、语言切换、hreflang、sitemap、JSON-LD 复用路由源。增加或删除页面/语言时一起调整相关来源和实际 URL，不复制一份 registry。
-- **MUST** JSON-LD 继续经 `jsonLd()` 统一序列化/转义；组织事实缺失时省略，不编造公司、地址、评价或报价。`set:html` 仅使用已知安全序列化结果，内容渲染不扩展为未过滤 HTML。
+- **MUST** EN 默认不加前缀，ES 使用 `/es`；canonical、语言切换、hreflang、sitemap、JSON-LD 复用路由源。增加或删除页面/语言时一起调整相关来源和实际 URL，不复制一份 registry。每种语言给出完整本地化正文与元信息，不以英文内容充当 `/es` 页面；新增语言须改掉 `site.ts` 的 `messages()`/`pathFor()` 等 EN/ES 二选一分支，不得静默回退英文；不按 IP 或 `Accept-Language` 跳转或在同一 URL 换语言。
+- **MUST** JSON-LD 继续经 `jsonLd()` 统一序列化/转义；组织事实缺失时省略，不编造公司、地址、评价或报价。`set:html` 仅使用已知安全序列化结果，内容渲染不扩展为未过滤 HTML。进入 `href`/`src` 的正文与配置 URL 只允许 `http(s)://` 或站内根相对路径（沿用 `InlineMarkdown` 的 `linkHref` 与 `site-schema` 的 `httpsUrl`/`rootRelativePath`）；`mailto:`/`tel:`/`wa.me` 只由已校验字段拼出。
 - **MUST** 格式有效与可上线是两层：空白必需身份/SEO、占位身份、待审法务和缺少生产配置继续阻断 readiness；`experiment` 的 noindex 不能因普通 build 改成可索引。不得自动勾选 owner/legal 的确认值。
 - **DEFAULT** 保持现有简单静态内容模型；没有查询/加载需求，不为少量页面引入 CMS、通用内容框架或重复 schema。
 
