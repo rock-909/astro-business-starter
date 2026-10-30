@@ -13,6 +13,8 @@
     "preview": "astro preview --host 127.0.0.1",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "verify": "npm run check && npm run build:test && npm test && npm run test:browser"
   },
   "dependencies": {
@@ -23,6 +25,8 @@
     "@astrojs/check": "0.9.12",
     "@emnapi/runtime": "1.11.3",
     "@playwright/test": "1.64.1",
+    "prettier": "3.9.10",
+    "prettier-plugin-astro": "1.1.2",
     "typescript": "6.0.3",
     "wrangler": "4.152.0"
   }
