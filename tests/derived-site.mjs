@@ -6,6 +6,7 @@
 // hide from CI. Sentinel domains only; nothing here is contacted.
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -15,8 +16,12 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
+import { localeTable, pages } from '../src/site-routes.ts';
 
 export const derivedRoot = 'dist/derived-site';
+// The language the fixture removes; its content directory is not copied at all.
+const removedLocale = 'es';
+const keptLocales = Object.keys(localeTable).filter((locale) => locale !== removedLocale);
 
 const identity = {
   name: 'Northwind Valves',
@@ -40,7 +45,10 @@ const identity = {
     favicon: '/brand/favicon.svg',
     logo: { status: 'ready', horizontal: '/brand/logo.svg', width: 160, height: 40 },
   },
-  readiness: { ownerConfirmedIdentity: false, legalReviewed: { en: false } },
+  readiness: {
+    ownerConfirmedIdentity: false,
+    legalReviewed: Object.fromEntries(keptLocales.map((locale) => [locale, false])),
+  },
   seo: {
     titleTemplate: '%s | Northwind Valves',
     defaultTitle: 'Northwind Valves',
@@ -72,8 +80,6 @@ export const minimalPng = Buffer.concat([
 ]);
 // The template's own brand files, left out so the fixture cannot pass on them.
 const templateBrandFiles = ['opengraph-image.png', 'opengraph-image.svg', 'icon.svg'];
-// The language the fixture removes; its content directory is not copied at all.
-const removedLocale = 'es';
 const aboutPage = {
   metadata: {
     title: 'About Northwind Valves',
@@ -140,17 +146,20 @@ export function writeDerivedSite(repo = '.') {
     });
   const routes = join(root, 'src/site-routes.ts');
   let registry = readFileSync(routes, 'utf8');
-  registry = replaceOnce(registry, new RegExp(`^ *${removedLocale}: \\{.*\\},\\n`, 'm'), '');
-  registry = replaceOnce(
-    registry,
-    /^( *\{ key: 'contact'.*\n)/m,
-    `$1  { key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true },\n`,
-  );
+  if (removedLocale in localeTable)
+    registry = replaceOnce(registry, new RegExp(`^ *${removedLocale}: \\{.*\\},\\n`, 'm'), '');
+  if (!pages.some(({ key }) => key === 'about'))
+    registry = replaceOnce(
+      registry,
+      /^( *\{ key: 'contact'.*\n)/m,
+      `$1  { key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true },\n`,
+    );
   writeFileSync(routes, registry);
-  writeFileSync(
-    join(root, 'src/content/en/about.ts'),
-    `export default ${JSON.stringify(aboutPage, null, 2)};\n`,
-  );
+  for (const locale of keptLocales) {
+    const file = join(root, `src/content/${locale}/about.ts`);
+    if (!existsSync(file))
+      writeFileSync(file, `export default ${JSON.stringify(aboutPage, null, 2)};\n`);
+  }
   writeFileSync(join(root, 'package.json'), JSON.stringify({ type: 'module', private: true }));
   symlinkSync(resolve(repo, 'node_modules'), join(root, 'node_modules'), 'dir');
   writeFileSync(join(root, 'src/site-data.json'), JSON.stringify(identity, null, 2));

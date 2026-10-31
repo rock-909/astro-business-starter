@@ -647,10 +647,12 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
             assert.match(html, /<link rel="canonical" href="https:\/\/supplier\.co\.uk\/"/);
             const built = (file) => readFileSync(join(fixture, 'dist/client', file), 'utf8');
             // Tests read the site config with the build's own env: the configured origin.
-            const { locales, pages, pathFor, canonical } = await loadSite(fixture, env);
+            const { locales, localeTable, pages, pathFor, canonical } = await loadSite(
+              fixture,
+              env,
+            );
             for (const locale of locales)
               assert.equal(new URL(canonical(locale, 'home')).origin, 'https://supplier.co.uk');
-            const ogLocale = { en: 'en_US', es: 'es_ES' };
             for (const locale of locales) {
               const page = built(join(pathFor(locale, 'home'), 'index.html').slice(1));
               assert.ok(
@@ -658,7 +660,9 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
                 locale,
               );
               assert.ok(
-                page.includes(`<meta property="og:locale" content="${ogLocale[locale]}"`),
+                page.includes(
+                  `<meta property="og:locale" content="${localeTable[locale].ogLocale}"`,
+                ),
                 locale,
               );
               // Alternates name the other registered languages only, none on a one-language site.
@@ -670,7 +674,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
               for (const other of locales.filter((other) => other !== locale))
                 assert.ok(
                   page.includes(
-                    `<meta property="og:locale:alternate" content="${ogLocale[other]}"`,
+                    `<meta property="og:locale:alternate" content="${localeTable[other].ogLocale}"`,
                   ),
                   `${locale} alternate ${other}`,
                 );

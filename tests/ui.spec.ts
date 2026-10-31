@@ -61,10 +61,9 @@ async function dismissConsent(page: Page, site: Site) {
 const form = (site: Site, locale: Locale) => site.messages(locale).inquiry.form;
 const messageLabel = (site: Site, locale: Locale) =>
   `${form(site, locale).message} (${form(site, locale).optional})`;
-// The language switcher shows each language's upper-case code and speaks its own name.
-const languageNames: Record<string, string> = { en: 'English', es: 'Español' };
-const languageLink = (page: Page, locale: Locale) =>
-  page.getByRole('link', { name: languageNames[locale], exact: true });
+// The language switcher shows each language's registered label and speaks its own name.
+const languageLink = (page: Page, site: Site, locale: Locale) =>
+  page.getByRole('link', { name: site.localeTable[locale].name, exact: true });
 // Brand names the footer gives each configured social network.
 const socialNames = { linkedin: 'LinkedIn', twitter: 'X' };
 const homeLocale = (site: Site) => site.locales[0];
@@ -222,7 +221,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await page
     .getByLabel(messageLabel(site, first), { exact: true })
     .fill('Keep this inquiry\nwith its second line.');
-  await languageLink(page, second!).click();
+  await languageLink(page, site, second!).click();
   await expect(page).toHaveURL(`${contactPath(site, second!)}?utm_source=locale-test#inquiry`);
   await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
     'Alex Buyer',
@@ -233,7 +232,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await expect(page.getByLabel(messageLabel(site, second!), { exact: true })).toHaveValue(
     'Keep this inquiry\nwith its second line.',
   );
-  await languageLink(page, first).click();
+  await languageLink(page, site, first).click();
   await expect(page.getByLabel(form(site, first).fullName, { exact: true })).toHaveValue(
     'Alex Buyer',
   );
@@ -779,8 +778,8 @@ test('language links have 24px phone targets and spoken language names; one lang
     await page.setViewportSize({ width, height: 812 });
     await page.goto(contactPath(site, secondLocale(site) ?? homeLocale(site)));
     for (const locale of site.locales) {
-      const link = languageLink(page, locale);
-      await expect(link).toHaveText(locale.toUpperCase());
+      const link = languageLink(page, site, locale);
+      await expect(link).toHaveText(site.localeTable[locale].label);
       const box = (await link.boundingBox())!;
       expect(box.width, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
       expect(box.height, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
@@ -797,10 +796,13 @@ test('every registered page is linked from its navigation, and content pages use
     await page.goto(site.pathFor(locale, 'home'));
     const main = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
     const footer = page.getByRole('contentinfo');
-    for (const { key, nav } of site.pages) {
+    for (const entry of site.pages) {
+      const { key } = entry;
       const href = site.pathFor(locale, key);
-      if (nav === 'main') await expect(main.locator(`a[href="${href}"]`)).toHaveCount(1);
-      await expect(footer.locator(`a[href="${href}"]`), `${locale} ${key}`).toHaveCount(1);
+      const nav = 'nav' in entry ? entry.nav : undefined;
+      const where = `${locale} ${key} ${nav ?? 'no nav'}`;
+      await expect(main.locator(`a[href="${href}"]`), where).toHaveCount(nav === 'main' ? 1 : 0);
+      await expect(footer.locator(`a[href="${href}"]`), where).toHaveCount(nav ? 1 : 0);
     }
   }
   // Owner pages that are not legal text: no table of contents, no last-updated line.
@@ -1022,7 +1024,7 @@ test('session draft survives refresh and a legal-page round trip', async ({ page
   const longestMessage = 'M'.repeat(2000);
   await page.getByLabel(messageLabel(site, locale), { exact: true }).fill(longestMessage);
   await page.reload();
-  await languageLink(page, second).click();
+  await languageLink(page, site, second).click();
   await expect(page.getByLabel(messageLabel(site, second), { exact: true })).toHaveValue(
     longestMessage,
   );
@@ -1059,7 +1061,7 @@ test('pending submission locks buyer edits and duplicate Enter, then clears only
   });
   const second = secondLocale(site);
   if (second) {
-    await languageLink(page, second).click();
+    await languageLink(page, site, second).click();
     await expect(page).toHaveURL(contactPath(site, locale));
     await expect(page.locator('[data-form-status]')).toContainText(f.localePending);
   }
@@ -1268,7 +1270,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   });
   await expect(page).toHaveURL(`${contactPath(site, first)}#inquiry`);
   await page.evaluate(() => history.replaceState(null, '', '?source=current#inquiry'));
-  await languageLink(page, second!).click();
+  await languageLink(page, site, second!).click();
   await expect(page).toHaveURL(`${contactPath(site, second!)}?source=current#inquiry`);
   await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
     'Current Location Buyer',
@@ -1276,7 +1278,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   await expect(page.getByLabel(form(site, second!).email, { exact: true })).toHaveValue(
     'current@example.test',
   );
-  await languageLink(page, first).click();
+  await languageLink(page, site, first).click();
   await expect(page).toHaveURL(`${contactPath(site, first)}?source=current#inquiry`);
 });
 
@@ -1400,7 +1402,7 @@ test('storage denial keeps unsent details on the current language page', async (
     await page.goto(contactPath(site, locale));
     await dismissConsent(page, site);
     await page.getByLabel(f.fullName, { exact: true }).fill('Unsaved Buyer');
-    await languageLink(page, next).click();
+    await languageLink(page, site, next).click();
     await expect(page).toHaveURL(contactPath(site, locale));
     await expect(page.locator('[data-form-status]')).toContainText(f.localeStorageUnavailable);
     await expect(page.locator('[data-form-status]')).toBeFocused();
@@ -1489,7 +1491,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
   await page.evaluate(() =>
     history.replaceState(null, '', '?utm_source=LaterMarker&gclid=LaterClick#inquiry'),
   );
-  if (second) await languageLink(page, second).click();
+  if (second) await languageLink(page, site, second).click();
   await page.reload();
   expect(
     await page.evaluate(() => JSON.parse(sessionStorage.getItem('inquiry_attribution')!)),
@@ -1504,7 +1506,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
     .poll(() => page.evaluate(() => sessionStorage.getItem('inquiry_attribution')))
     .toBeNull();
   await page.reload();
-  if (second) await languageLink(page, first).click();
+  if (second) await languageLink(page, site, first).click();
   expect(await page.evaluate(() => sessionStorage.getItem('inquiry_attribution'))).toBeNull();
   await page.getByLabel(t.inquiry.form.fullName, { exact: true }).fill('Withdrawn Buyer');
   await page.getByLabel(t.inquiry.form.email, { exact: true }).fill('withdrawn@example.test');
