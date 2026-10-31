@@ -43,7 +43,7 @@
 
 **Resend。** 先在 Resend 验证 `RESEND_FROM_EMAIL` 所在的发信域名（SPF/DKIM），再用正式域名提交一条合成询盘，确认它确实进入 `INQUIRY_TO_EMAIL` 收件箱（而非垃圾箱）。Resend 显示已接受只代表供应商接收，不代表收件箱到达。
 
-**自定义域名与 TLS。** 把 Worker 绑定到正式域名并确认证书生效，`PUBLIC_SITE_URL` 与之一致。模板不发送 `Strict-Transport-Security`；是否在 Cloudflare 开启 HSTS，以及是否加 `includeSubDomains`/`preload`，由域名所有者按整个域名的情况决定——`preload` 会约束所有子域名且难以撤回。
+**自定义域名与 TLS。** 把 Worker 绑定到正式域名并确认证书生效，`PUBLIC_SITE_URL` 与之一致。模板对每个响应发送 `Strict-Transport-Security: max-age=31536000`，只约束提供站点的那个主机名：浏览器经 HTTPS 访问一次后，一年内不再用 HTTP 访问它，所以上线前先确认该主机名只走 HTTPS。是否加 `includeSubDomains`/`preload`，由域名所有者按整个域名的情况决定——`preload` 会约束所有子域名且难以撤回；要改时同步修改 `public/_headers` 与 `src/security-headers.ts` 两份响应头。
 
 ## 5. 搜索、分析与爬虫
 

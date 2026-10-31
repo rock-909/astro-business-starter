@@ -561,6 +561,12 @@ test('native rate-limit pre-check refuses an over-limit IP before the paid Upsta
   }
 });
 
+// HSTS covers only the serving host; includeSubDomains/preload stay the domain owner's choice.
+function assertIsolationHeaders(response) {
+  assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.equal(response.headers.get('strict-transport-security'), 'max-age=31536000');
+}
+
 test('static assets, SEO endpoints, health, 404 and client secret boundary', async () => {
   const h = await startHarness();
   try {
@@ -577,6 +583,7 @@ test('static assets, SEO endpoints, health, 404 and client secret boundary', asy
       const response = await h.mf.dispatchFetch(`http://localhost${path}`);
       assert.equal(response.status, 200);
       assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+      assertIsolationHeaders(response);
       const html = await response.text();
       assert.match(html, /noindex,nofollow/);
       assert.equal((html.match(/<main\b/g) || []).length, 1);
@@ -611,6 +618,7 @@ test('static assets, SEO endpoints, health, 404 and client secret boundary', asy
     for (const path of ['/missing', '/en/contact', '/products', '/es/missing']) {
       const response = await h.mf.dispatchFetch(`http://localhost${path}`);
       assert.equal(response.status, 404);
+      assertIsolationHeaders(response);
     }
     const client = readdirSync('dist/client', { recursive: true })
       .filter((file) => /\.(js|html)$/.test(file))
