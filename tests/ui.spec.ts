@@ -609,7 +609,7 @@ test('the sticky header marks the current page, offers contact as a button, and 
   await expect(banner).toHaveCSS('top', '0px');
   // The current item is in the foreground colour, the others grey; nothing is underlined.
   const nav = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
-  const currentItem = nav.locator('a[aria-current="page"]');
+  const currentItem = nav.locator(':scope > ul > li > a[aria-current="page"]');
   await expect(currentItem).toHaveAttribute('href', site.pathFor(locale, 'home'));
   expect(await look(currentItem)).toEqual(current);
   const otherItems = await nav
@@ -631,7 +631,9 @@ test('the sticky header marks the current page, offers contact as a button, and 
   // Contact is the brand-coloured button, not a navigation link.
   const cta = banner.getByRole('link', { name: t.navigation.contactSales, exact: true });
   await expect(cta).toHaveAttribute('href', contactPath(site, locale));
-  await expect(nav.locator(`a[href="${contactPath(site, locale)}"]`)).toHaveCount(0);
+  await expect(
+    nav.locator(`:scope > ul > li > a[href="${contactPath(site, locale)}"]`),
+  ).toHaveCount(0);
   expect(
     await cta.evaluate((link) => window.rgba(getComputedStyle(link).backgroundColor).join()),
   ).toBe(await tokenColor(page, '--button-primary-bg'));
@@ -1063,6 +1065,19 @@ test('the language menu opens on hover or click, checks the current language and
   // Keyboard: Arrow Down opens and focuses the first language; Escape closes and returns.
   await trigger.focus();
   await page.keyboard.press('ArrowDown');
+  await expect(list.getByRole('link').first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(list).toBeHidden();
+  await expect(trigger).toBeFocused();
+  // Hover-open, then Arrow Down into the languages: leaving with the pointer keeps it open.
+  await trigger.hover();
+  await expect(list).toBeVisible();
+  await trigger.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(list.getByRole('link').first()).toBeFocused();
+  await page.mouse.move(0, 500);
+  await page.waitForTimeout(200);
+  await expect(list).toBeVisible();
   await expect(list.getByRole('link').first()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(list).toBeHidden();

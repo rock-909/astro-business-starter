@@ -145,6 +145,10 @@ for (const menu of header.querySelectorAll<HTMLDetailsElement>('[data-language-m
   const options = () => [...menu.querySelectorAll<HTMLElement>('a')];
   let timer: ReturnType<typeof setTimeout> | undefined;
   let openedByPointer = false;
+  const takeOverByKeyboard = () => {
+    clearTimeout(timer);
+    openedByPointer = false;
+  };
   menu.addEventListener('pointerenter', (event) => {
     if (isTouch(event)) return;
     clearTimeout(timer);
@@ -171,6 +175,7 @@ for (const menu of header.querySelectorAll<HTMLDetailsElement>('[data-language-m
     openedByPointer = false;
   });
   menu.addEventListener('keydown', (event) => {
+    takeOverByKeyboard();
     if (event.key === 'Escape' && menu.open) {
       event.preventDefault();
       menu.open = false;
@@ -198,6 +203,9 @@ for (const menu of header.querySelectorAll<HTMLDetailsElement>('[data-language-m
     if (next === undefined) return;
     event.preventDefault();
     items[next]!.focus();
+  });
+  menu.addEventListener('focusin', (event) => {
+    if ((event.target as Element).closest('a')) takeOverByKeyboard();
   });
   menu.addEventListener('focusout', (event) => {
     const next = event.relatedTarget as Node | null;
