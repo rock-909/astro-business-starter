@@ -60,9 +60,35 @@ async function dismissConsent(page: Page, site: Site) {
 const form = (site: Site, locale: Locale) => site.messages(locale).inquiry.form;
 const messageLabel = (site: Site, locale: Locale) =>
   `${form(site, locale).message} (${form(site, locale).optional})`;
-// The language switcher shows each language's registered label and speaks its own name.
+// Each language is offered under its own name, in the header menu on wide screens and in
+// the phone drawer below 840px.
 const languageLink = (page: Page, site: Site, locale: Locale) =>
   page.getByRole('link', { name: site.localeTable[locale].name, exact: true });
+const languageTrigger = (page: Page, site: Site, locale: Locale) =>
+  page
+    .getByRole('banner')
+    .getByLabel(
+      site
+        .messages(locale)
+        .accessibility.language.replace('{language}', site.localeTable[locale].name),
+      { exact: true },
+    )
+    .filter({ visible: true });
+async function openLanguages(page: Page, site: Site) {
+  const current = (await page.locator('html').getAttribute('lang')) as Locale;
+  const t = site.messages(current).accessibility;
+  if (!(await page.locator('[data-language-menu]').isVisible())) {
+    await page.getByRole('button', { name: t.openMenu, exact: true }).click();
+    await expect(page.getByRole('dialog', { name: t.mobileNavigation })).toBeVisible();
+  }
+  const trigger = languageTrigger(page, site, current);
+  if (!(await trigger.evaluate((summary) => (summary.parentElement as HTMLDetailsElement).open)))
+    await trigger.click();
+}
+async function switchLanguage(page: Page, site: Site, locale: Locale) {
+  await openLanguages(page, site);
+  await languageLink(page, site, locale).click();
+}
 // Brand names the footer gives each configured social network.
 const socialNames = { linkedin: 'LinkedIn', twitter: 'X' };
 const homeLocale = (site: Site) => site.locales[0];
@@ -214,8 +240,9 @@ test('configured contact methods, logo and social links render; unconfigured one
         .poll(() => logo.evaluate((image: HTMLImageElement) => image.naturalWidth))
         .toBeGreaterThan(0);
     } else {
-      await expect(logo).toHaveCount(0);
-      await expect(page.getByRole('banner').locator('.brand .brand-mark')).toBeVisible();
+      // Like the reference site, a header without a configured logo shows no brand at all.
+      await expect(page.getByRole('banner').getByRole('img')).toHaveCount(0);
+      await expect(page.getByRole('banner').locator('.brand')).toHaveCount(0);
     }
 
     const footer = page.getByRole('contentinfo');
@@ -284,7 +311,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await page
     .getByLabel(messageLabel(site, first), { exact: true })
     .fill('Keep this inquiry\nwith its second line.');
-  await languageLink(page, site, second!).click();
+  await switchLanguage(page, site, second!);
   await expect(page).toHaveURL(`${contactPath(site, second!)}?utm_source=locale-test#inquiry`);
   await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
     'Alex Buyer',
@@ -295,7 +322,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await expect(page.getByLabel(messageLabel(site, second!), { exact: true })).toHaveValue(
     'Keep this inquiry\nwith its second line.',
   );
-  await languageLink(page, site, first).click();
+  await switchLanguage(page, site, first);
   await expect(page.getByLabel(form(site, first).fullName, { exact: true })).toHaveValue(
     'Alex Buyer',
   );
@@ -443,6 +470,21 @@ test('no-JS content, legal links, and secure fallback remain readable', async ({
       page.getByRole('region', { name: f.contactAriaLabel }).getByRole('link', { name: email }),
     ).toHaveAttribute('href', `mailto:${email}`);
   else await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+  // The language menu and the phone menu still open as native disclosures.
+  const t = site.messages(locale);
+  if (site.locales.length > 1) {
+    await languageTrigger(page, site, locale).click();
+    await expect(languageLink(page, site, homeLocale(site))).toBeVisible();
+    await languageTrigger(page, site, locale).click();
+  }
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole('banner').locator('[data-mobile-fallback] > summary').click();
+  const phoneMenu = page.getByRole('navigation', { name: t.accessibility.mobileNavigation });
+  await expect(
+    phoneMenu.getByRole('link', { name: t.navigation.contactSales, exact: true }),
+  ).toBeVisible();
+  await page.getByRole('banner').locator('[data-mobile-fallback] > summary').click();
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page
     .getByRole('link', { name: site.messages(locale).footer.sections.support.privacy, exact: true })
     .first()
@@ -539,14 +581,14 @@ test('a long company email fits phone widths, the widget fits its column, and th
   expect(Math.abs(formTop - (await title.boundingBox())!.y)).toBeLessThan(2);
 });
 
-test('header marks the current page and language alike; links and buttons react to hover in both themes', async ({
+test('the sticky header marks the current page, offers contact as a button, and links and buttons react to hover', async ({
   page,
   site,
 }) => {
   const locale = homeLocale(site);
   const t = site.messages(locale);
-  const look = (selector: string) =>
-    page.locator(selector).evaluate((element) => {
+  const look = (target: ReturnType<Page['locator']>) =>
+    target.evaluate((element) => {
       const style = getComputedStyle(element);
       return { color: window.rgba(style.color).join(), underline: style.textDecorationLine };
     });
@@ -557,36 +599,57 @@ test('header marks the current page and language alike; links and buttons react 
   const current = { color: await tokenColor(page, '--foreground'), underline: 'none' };
   const other = { color: await tokenColor(page, '--muted-foreground'), underline: 'none' };
   expect(current.color).not.toBe(other.color);
+  // Sticky like the reference site: 64px, a translucent background, and it stays on top.
+  const banner = page.getByRole('banner');
+  expect((await banner.boundingBox())!.height).toBe(65);
+  expect(
+    await banner.evaluate((header) => window.rgba(getComputedStyle(header).backgroundColor)[3]),
+  ).toBeLessThan(255);
+  await expect(banner).toHaveCSS('position', 'sticky');
+  await expect(banner).toHaveCSS('top', '0px');
   // The current item is in the foreground colour, the others grey; nothing is underlined.
-  const multilingual = site.locales.length > 1;
-  const currentItems = [
-    `.main-nav a[href="${site.pathFor(locale, 'home')}"]`,
-    ...(multilingual ? [`.language-nav a[lang="${locale}"]`] : []),
-  ];
-  for (const selector of currentItems) expect(await look(selector), selector).toEqual(current);
-  const otherItems = [
-    `.main-nav a[href="${contactPath(site, locale)}"]`,
-    ...site.locales
-      .filter((language) => language !== locale)
-      .map((language) => `.language-nav a[lang="${language}"]`),
-  ];
-  for (const selector of otherItems) {
-    expect(await look(selector), selector).toEqual(other);
-    // Hover darkens the text without an underline, and the current item in the same nav
-    // turns grey so only one item is highlighted at a time.
-    await page.locator(selector).hover();
+  const nav = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
+  const currentItem = nav.locator('a[aria-current="page"]');
+  await expect(currentItem).toHaveAttribute('href', site.pathFor(locale, 'home'));
+  expect(await look(currentItem)).toEqual(current);
+  const otherItems = await nav
+    .locator(':scope > ul > li > :is(a, button):not([aria-current])')
+    .all();
+  for (const item of otherItems) {
+    const name = (await item.textContent())!.trim();
+    expect(await look(item), name).toEqual(other);
+    // Hover darkens the text without an underline, and the current item turns grey so only
+    // one item is highlighted at a time.
+    await item.hover();
     await settled(page);
-    expect(await look(selector), `${selector} hovered`).toEqual(current);
-    const sameNav = currentItems.find((item) => item.split(' ')[0] === selector.split(' ')[0])!;
-    expect(await look(sameNav), `${sameNav} while ${selector} is hovered`).toEqual(other);
-    await page.mouse.move(0, 0);
+    expect(await look(item), `${name} hovered`).toEqual(current);
+    expect(await look(currentItem), `current while ${name} is hovered`).toEqual(other);
+    await page.mouse.move(0, 300);
+    await page.keyboard.press('Escape');
     await settled(page);
   }
-  // The brand gives hover feedback without an underline.
-  expect((await look('a.brand')).underline).toBe('none');
-  await page.locator('a.brand').hover();
-  expect((await look('a.brand')).underline).toBe('none');
-  await expect(page.locator('.main-nav')).not.toContainText('↗');
+  // Contact is the brand-coloured button, not a navigation link.
+  const cta = banner.getByRole('link', { name: t.navigation.contactSales, exact: true });
+  await expect(cta).toHaveAttribute('href', contactPath(site, locale));
+  await expect(nav.locator(`a[href="${contactPath(site, locale)}"]`)).toHaveCount(0);
+  expect(
+    await cta.evaluate((link) => window.rgba(getComputedStyle(link).backgroundColor).join()),
+  ).toBe(await tokenColor(page, '--button-primary-bg'));
+  expect((await cta.boundingBox())!.height).toBe(32);
+  if (site.locales.length > 1) {
+    const trigger = languageTrigger(page, site, locale);
+    expect(await look(trigger)).toEqual(other);
+    await trigger.hover();
+    await settled(page);
+    expect(await look(trigger)).toEqual(current);
+    await page.mouse.move(0, 300);
+  }
+  // A configured logo gives hover feedback without an underline.
+  const brand = banner.locator('a.brand');
+  if (await brand.count()) {
+    await brand.hover();
+    expect((await look(brand)).underline).toBe('none');
+  }
 
   const contrast = (selector: string) =>
     page.locator(selector).evaluate((element) => {
@@ -953,30 +1016,243 @@ test('a pointer click that leaves focus on the page still hands focus back after
   await expect(trigger).toBeFocused();
 });
 
-test('language links have 24px phone targets and spoken language names; one language shows none', async ({
+test('the language menu opens on hover or click, checks the current language and closes on Escape; one language shows none', async ({
   page,
   site,
 }) => {
   if (site.locales.length === 1) {
-    // Nothing to switch to: no lone language link and no empty language navigation.
+    // Nothing to switch to: no language menu and no lone language link.
     await page.goto(site.pathFor(homeLocale(site), 'home'));
-    await expect(
-      page.getByRole('navigation', { name: site.messages(homeLocale(site)).navigation.language }),
-    ).toHaveCount(0);
+    await expect(page.locator('[data-language-menu], .mobile-language')).toHaveCount(0);
     await expect(page.locator('[data-locale-link]')).toHaveCount(0);
     return;
   }
-  for (const width of [320, 375]) {
-    await page.setViewportSize({ width, height: 812 });
-    await page.goto(contactPath(site, secondLocale(site) ?? homeLocale(site)));
-    for (const locale of site.locales) {
-      const link = languageLink(page, site, locale);
-      await expect(link).toHaveText(site.localeTable[locale].label);
-      const box = (await link.boundingBox())!;
-      expect(box.width, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
-      expect(box.height, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
+  const locale = secondLocale(site)!;
+  const name = (language: Locale) => site.localeTable[language].name;
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  const trigger = languageTrigger(page, site, locale);
+  await expect(trigger).toHaveText(name(locale));
+  const menu = page.locator('[data-language-menu]');
+  const list = menu.getByRole('list', { name: site.messages(locale).navigation.language });
+  await expect(list).toBeHidden();
+  // Hover opens it at once with a fade and scale; leaving closes it.
+  await trigger.hover();
+  await expect(list).toBeVisible();
+  const opening = await list.evaluate((panel) =>
+    panel.getAnimations().map((animation) => (animation as CSSTransition).transitionProperty),
+  );
+  expect(opening).toEqual(expect.arrayContaining(['opacity', 'transform']));
+  // The current language is marked and checked but is not a link; the others are links.
+  const currentOption = list.locator('[aria-current="true"]');
+  await expect(currentOption).toHaveText(name(locale));
+  await expect(currentOption.locator('svg')).toHaveCount(1);
+  for (const language of site.locales.filter((language) => language !== locale))
+    await expect(languageLink(page, site, language)).toHaveAttribute('hreflang', language);
+  await expect(list.getByRole('link')).toHaveCount(site.locales.length - 1);
+  await page.mouse.move(0, 500);
+  await expect(list).toBeHidden();
+  // A click right after the hover keeps it open, also once the pointer leaves.
+  await trigger.click();
+  await expect(list).toBeVisible();
+  await page.mouse.move(0, 500);
+  await page.waitForTimeout(200);
+  await expect(list).toBeVisible();
+  await page.mouse.click(5, 500);
+  await expect(list).toBeHidden();
+  // Keyboard: Arrow Down opens and focuses the first language; Escape closes and returns.
+  await trigger.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(list.getByRole('link').first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(list).toBeHidden();
+  await expect(trigger).toBeFocused();
+  // A press outside closes it.
+  await page.keyboard.press('Enter');
+  await expect(list).toBeVisible();
+  await page.mouse.click(5, 500);
+  await expect(list).toBeHidden();
+});
+
+test('the phone menu is a right-side drawer with navigation, the inquiry button and languages', async ({
+  page,
+  site,
+}) => {
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
+  for (const [width, drawerWidth] of [
+    [375, 320],
+    [700, 360],
+  ]) {
+    await page.setViewportSize({ width: width!, height: 812 });
+    await page.goto(site.pathFor(locale, 'home'));
+    await dismissConsent(page, site);
+    const banner = page.getByRole('banner');
+    // The phone header keeps the inquiry button next to the menu button.
+    await expect(
+      banner.getByRole('link', { name: t.navigation.contactSales, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: t.accessibility.mainNavigation }),
+    ).toBeHidden();
+    const open = banner.getByRole('button', { name: t.accessibility.openMenu, exact: true });
+    await open.click();
+    const drawer = page.getByRole('dialog', { name: t.accessibility.mobileNavigation });
+    await expect(drawer).toBeVisible();
+    await expect(open).toHaveAttribute('aria-expanded', 'true');
+    await expect
+      .poll(() => drawer.evaluate((dialog) => dialog.getBoundingClientRect().x))
+      .toBe(width! - drawerWidth!);
+    expect((await drawer.boundingBox())!.width).toBe(drawerWidth);
+    // It slides in over 500ms and focus starts on the close button.
+    const close = drawer.getByRole('button', { name: t.accessibility.closeMenu, exact: true });
+    await expect(close).toBeFocused();
+    const menu = drawer.getByRole('navigation', { name: t.accessibility.mobileNavigation });
+    for (const entry of site.pages.filter(
+      (item) => 'nav' in item && item.nav === 'main' && item.key !== 'contact',
+    ))
+      await expect(
+        menu.locator(`:scope > ul > li > a[href="${site.pathFor(locale, entry.key)}"]`),
+      ).toHaveCount(1);
+    await expect(menu.locator('a[aria-current="page"]').first()).toHaveAttribute(
+      'href',
+      site.pathFor(locale, 'home'),
+    );
+    const cta = menu.getByRole('link', { name: t.navigation.contactSales, exact: true });
+    expect((await cta.boundingBox())!.width).toBeGreaterThan(drawerWidth! - 40);
+    // Focus stays inside the open drawer.
+    for (let presses = 0; presses < 12; presses++) {
+      await page.keyboard.press('Tab');
+      expect(
+        await drawer.evaluate((dialog) => dialog.contains(document.activeElement)),
+        `Tab ${presses}`,
+      ).toBe(true);
     }
+    // The close button slides it out first, then closes and hands focus back.
+    await close.click();
+    await expect(drawer).toHaveAttribute('data-closing', '');
+    await expect(drawer).toBeHidden();
+    await expect(open).toBeFocused();
+    await expect(open).toHaveAttribute('aria-expanded', 'false');
+    // Escape and a press on the dimmed page close it as well.
+    await open.click();
+    await expect(drawer).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toHaveAttribute('data-closing', '');
+    await expect(drawer).toBeHidden();
+    await open.click();
+    await expect(close).toBeFocused();
+    await page.mouse.click(10, 400);
+    await expect(drawer).toBeHidden();
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).overflow))
+      .not.toBe('hidden');
   }
+  // Languages collapse at the bottom; each one is a 44px row and the current one is checked.
+  const second = secondLocale(site);
+  if (second) {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await openLanguages(page, site);
+    const drawer = page.getByRole('dialog', { name: t.accessibility.mobileNavigation });
+    const current = drawer.locator('[aria-current="true"]');
+    await expect(current).toHaveText(site.localeTable[locale].name);
+    expect((await current.boundingBox())!.height).toBe(44);
+    expect((await languageLink(page, site, second).boundingBox())!.height).toBe(44);
+    await languageLink(page, site, second).click();
+    await expect(page).toHaveURL(site.pathFor(second, 'home'));
+  }
+});
+
+test('configured submenus open as a full-width panel with keyboard support and collapse in the phone drawer', async ({
+  page,
+  site,
+}) => {
+  const [menu] = site.navMenus;
+  test.skip(!menu, 'no submenu configured');
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
+  const labels = site.menuLabels(locale, menu!);
+  const linkNames = menu!.groups.flatMap((group) =>
+    group.links.map((link) =>
+      'page' in link
+        ? link.page === 'home'
+          ? t.navigation.home
+          : site.pageContent(locale, link.page as Exclude<typeof link.page, 'home'>).metadata.title
+        : `${labels.links![link.key]} (${t.accessibility.opensInNewTab})`,
+    ),
+  );
+  await page.goto(site.pathFor(locale, 'home'));
+  await dismissConsent(page, site);
+  const nav = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
+  const trigger = nav.getByRole('button', { name: labels.label, exact: true });
+  const panel = page.locator(`#${await trigger.getAttribute('aria-controls')}`);
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(panel).toBeHidden();
+  // Hover opens it after a short delay: full width under the header, grouped, page dimmed.
+  await trigger.hover();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(panel).toBeVisible();
+  const box = (await panel.boundingBox())!;
+  expect(box.x).toBe(0);
+  expect(box.width).toBe(page.viewportSize()!.width);
+  expect(box.y).toBe((await page.getByRole('banner').boundingBox())!.height - 1);
+  for (const group of menu!.groups)
+    await expect(
+      panel.getByRole('list', { name: labels.groups[group.key], exact: true }),
+    ).toBeVisible();
+  for (const name of linkNames)
+    await expect(panel.getByRole('link', { name, exact: true })).toBeVisible();
+  const external = panel.locator('a[target="_blank"]');
+  for (const link of await external.all())
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  const dim = await panel.evaluate(
+    (element) => window.rgba(getComputedStyle(element, '::after').backgroundColor)[3]!,
+  );
+  expect(Math.abs(dim - 128)).toBeLessThanOrEqual(1);
+  // Leaving closes it; a click toggles it; a press outside closes it.
+  await page.mouse.move(5, 600);
+  await expect(panel).toBeHidden();
+  await trigger.click();
+  await expect(panel).toBeVisible();
+  await page.mouse.click(5, 700);
+  await expect(panel).toBeHidden();
+  // Keyboard: Enter opens and focuses the first link, arrows and Home/End move within the
+  // panel, Escape closes it and returns focus to the button.
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  const links = panel.getByRole('link');
+  await expect(links.first()).toBeFocused();
+  if (linkNames.length > 1) {
+    await page.keyboard.press('ArrowDown');
+    await expect(links.nth(1)).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(links.last()).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(links.first()).toBeFocused();
+  }
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('ArrowDown');
+  await expect(links.first()).toBeFocused();
+  // Focus leaving the navigation closes the panel so it never covers what comes next.
+  for (
+    let presses = 0;
+    presses <= linkNames.length && (await nav.evaluate((n) => n.contains(document.activeElement)));
+    presses++
+  )
+    await page.keyboard.press('Tab');
+  await expect(panel).toBeHidden();
+  // Phone: the same links inside a collapsible section of the drawer.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole('button', { name: t.accessibility.openMenu, exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: t.accessibility.mobileNavigation });
+  const section = drawer.locator('details', { has: page.getByText(labels.label, { exact: true }) });
+  await expect(section.getByRole('link').first()).toBeHidden();
+  await section.locator('summary').click();
+  for (const name of linkNames)
+    await expect(section.getByRole('link', { name, exact: true })).toBeVisible();
 });
 
 test('every registered page is linked from its navigation, and content pages get the page shell', async ({
@@ -988,12 +1264,18 @@ test('every registered page is linked from its navigation, and content pages get
     await page.goto(site.pathFor(locale, 'home'));
     const main = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
     const footer = page.getByRole('contentinfo');
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: t.navigation.contactSales, exact: true }),
+    ).toHaveAttribute('href', site.pathFor(locale, 'contact'));
     for (const entry of site.pages) {
       const { key } = entry;
       const href = site.pathFor(locale, key);
       const nav = 'nav' in entry ? entry.nav : undefined;
       const where = `${locale} ${key} ${nav ?? 'no nav'}`;
-      await expect(main.locator(`a[href="${href}"]`), where).toHaveCount(nav === 'main' ? 1 : 0);
+      // Contact is the header's button rather than a navigation link.
+      await expect(main.locator(`:scope > ul > li > a[href="${href}"]`), where).toHaveCount(
+        nav === 'main' && key !== 'contact' ? 1 : 0,
+      );
       await expect(footer.locator(`a[href="${href}"]`), where).toHaveCount(nav ? 1 : 0);
     }
   }
@@ -1125,17 +1407,23 @@ test('the theme select shows the current theme and the header brand follows the 
     if (index === 0) await select.selectOption('dark');
     await expect(select.locator('option:checked')).toHaveText(t.theme.dark);
   }
-  const brand = page.locator('.site-header .brand');
+  // The header never shows the site name; a configured logo stands alone and is inverted in
+  // dark themes so a dark-on-light logo stays visible.
+  const banner = page.getByRole('banner');
+  // The brand slot holds the logo image only, never the site name as text.
+  await expect(banner.locator('.header-left')).toHaveText('');
+  const logo = banner.locator('.brand img');
   if (site.site.brandAssets.logo?.status === 'ready') {
-    // A configured logo replaces the template mark rather than sitting beside it.
-    await expect(brand.locator('img')).toBeVisible();
-    await expect(brand.locator('.brand-mark')).toHaveCount(0);
-  } else {
-    // Without a logo the template's own mark stands in next to the site name.
-    await expect(brand.locator('.brand-mark')).toBeVisible();
-    await expect(brand.locator('img')).toHaveCount(0);
-    await expect(brand).toHaveText(site.site.name);
-  }
+    await expect(logo).toBeVisible();
+    expect((await logo.boundingBox())!.height).toBe(32);
+    await expect(logo).toHaveCSS('filter', 'invert(1)');
+    await page
+      .getByRole('combobox', {
+        name: site.messages(site.locales.at(-1)!).accessibility.themeSelector,
+      })
+      .selectOption('light');
+    await expect(logo).toHaveCSS('filter', 'none');
+  } else await expect(logo).toHaveCount(0);
 });
 
 test('page shells put the description under the title, show no date, and give content and legal sections a contents card', async ({
@@ -1315,7 +1603,7 @@ test('session draft survives refresh and a legal-page round trip', async ({ page
   const longestMessage = 'M'.repeat(2000);
   await page.getByLabel(messageLabel(site, locale), { exact: true }).fill(longestMessage);
   await page.reload();
-  await languageLink(page, site, second).click();
+  await switchLanguage(page, site, second);
   await expect(page.getByLabel(messageLabel(site, second), { exact: true })).toHaveValue(
     longestMessage,
   );
@@ -1353,7 +1641,7 @@ test('pending submission locks buyer edits and duplicate Enter, then clears only
   });
   const second = secondLocale(site);
   if (second) {
-    await languageLink(page, site, second).click();
+    await switchLanguage(page, site, second);
     await expect(page).toHaveURL(contactPath(site, locale));
     await expect(page.locator('[data-form-status]')).toContainText(f.localePending);
   }
@@ -1563,7 +1851,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   });
   await expect(page).toHaveURL(`${contactPath(site, first)}#inquiry`);
   await page.evaluate(() => history.replaceState(null, '', '?source=current#inquiry'));
-  await languageLink(page, site, second!).click();
+  await switchLanguage(page, site, second!);
   await expect(page).toHaveURL(`${contactPath(site, second!)}?source=current#inquiry`);
   await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
     'Current Location Buyer',
@@ -1571,7 +1859,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   await expect(page.getByLabel(form(site, second!).email, { exact: true })).toHaveValue(
     'current@example.test',
   );
-  await languageLink(page, site, first).click();
+  await switchLanguage(page, site, first);
   await expect(page).toHaveURL(`${contactPath(site, first)}?source=current#inquiry`);
 });
 
@@ -1695,7 +1983,7 @@ test('storage denial keeps unsent details on the current language page', async (
     await page.goto(contactPath(site, locale));
     await dismissConsent(page, site);
     await page.getByLabel(f.fullName, { exact: true }).fill('Unsaved Buyer');
-    await languageLink(page, site, next).click();
+    await switchLanguage(page, site, next);
     await expect(page).toHaveURL(contactPath(site, locale));
     await expect(page.locator('[data-form-status]')).toContainText(f.localeStorageUnavailable);
     await expect(page.locator('[data-form-status]')).toBeFocused();
@@ -1784,7 +2072,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
   await page.evaluate(() =>
     history.replaceState(null, '', '?utm_source=LaterMarker&gclid=LaterClick#inquiry'),
   );
-  if (second) await languageLink(page, site, second).click();
+  if (second) await switchLanguage(page, site, second);
   await page.reload();
   expect(
     await page.evaluate(() => JSON.parse(sessionStorage.getItem('inquiry_attribution')!)),
@@ -1799,7 +2087,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
     .poll(() => page.evaluate(() => sessionStorage.getItem('inquiry_attribution')))
     .toBeNull();
   await page.reload();
-  if (second) await languageLink(page, site, first).click();
+  if (second) await switchLanguage(page, site, first);
   expect(await page.evaluate(() => sessionStorage.getItem('inquiry_attribution'))).toBeNull();
   await page.getByLabel(t.inquiry.form.fullName, { exact: true }).fill('Withdrawn Buyer');
   await page.getByLabel(t.inquiry.form.email, { exact: true }).fill('withdrawn@example.test');

@@ -6,7 +6,7 @@ import { isIP } from 'node:net';
 import { loadEnv } from 'vite';
 import { unstable_readConfig } from 'wrangler';
 import { parseAllowedHosts } from '../src/lib/inquiry-hosts.ts';
-import { locales, pages } from '../src/site-routes.ts';
+import { locales, navMenuIssues, pages } from '../src/site-routes.ts';
 
 const publicHostname = (host) =>
   !isIP(host) &&
@@ -206,10 +206,14 @@ export function readinessIssues(env = process.env, data, root = new URL('../', i
   for (const locale of locales) {
     const messagesFile = `src/content/${locale}/messages.json`;
     if (!exists(messagesFile)) issues.push(`${messagesFile} is missing`);
-    else
-      for (const [path, value] of stringLeaves(JSON.parse(read(messagesFile))))
+    else {
+      const messages = JSON.parse(read(messagesFile));
+      for (const [path, value] of stringLeaves(messages))
         if (!templateOnlyKeys.test(path) && templateCopy.test(value))
           issues.push(`${locale}/messages ${path} still contains template copy`);
+      // Header submenus need their labels in every language (the build checks this too).
+      issues.push(...navMenuIssues(locale, messages));
+    }
     for (const { key, kind } of pages.filter((page) => page.kind !== 'home')) {
       const file = `src/content/${locale}/${key}.ts`;
       if (!exists(file)) {
