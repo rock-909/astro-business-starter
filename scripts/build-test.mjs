@@ -1,8 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { writeDerivedSite } from '../tests/derived-site.mjs';
-// A public widget-key fixture is NOT a verification bypass. Tests replace the
-// external widget script and external provider fetch; the actual Action runs.
+import { testBuildEnv } from '../tests/site-config.mjs';
 const build = (cwd) => {
   const result = spawnSync(
     process.execPath,
@@ -12,8 +11,7 @@ const build = (cwd) => {
       stdio: 'inherit',
       env: {
         ...process.env,
-        PUBLIC_APP_ENV: 'experiment',
-        PUBLIC_TURNSTILE_SITE_KEY: 'fixture-public-key',
+        ...testBuildEnv,
         ASTRO_TELEMETRY_DISABLED: '1',
         WRANGLER_SEND_METRICS: 'false',
       },

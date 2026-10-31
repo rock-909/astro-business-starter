@@ -2,8 +2,17 @@
 // links, company facts and rewritten copy. Tests run against its build as well as the
 // template's, so neither the layouts only derived sites render nor template wording can
 // hide from CI. Sentinel domains only; nothing here is contacted.
-import { cpSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import {
+  cpSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { crc32, deflateSync } from 'node:zlib';
 
 export const derivedRoot = 'dist/derived-site';
 
@@ -25,9 +34,9 @@ const identity = {
     location: { city: 'Leeds', country: 'GB' },
   },
   brandAssets: {
-    ogImage: '/opengraph-image.png',
-    favicon: '/icon.svg',
-    logo: { status: 'ready', horizontal: '/northwind-logo.svg', width: 160, height: 40 },
+    ogImage: '/brand/share.png',
+    favicon: '/brand/favicon.svg',
+    logo: { status: 'ready', horizontal: '/brand/logo.svg', width: 160, height: 40 },
   },
   readiness: { ownerConfirmedIdentity: false, legalReviewed: { en: false, es: false } },
   seo: {
@@ -38,6 +47,29 @@ const identity = {
 };
 const logo =
   '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40"><rect width="160" height="40" rx="6" fill="#123"/><text x="12" y="26" fill="#fff" font-family="sans-serif" font-size="16">Northwind</text></svg>\n';
+const favicon =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#123"/></svg>\n';
+// A minimal valid PNG (1x1, opaque) generated here so no template image is reused.
+const chunk = (type, data) => {
+  const body = Buffer.concat([Buffer.from(type), data]);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, crc]);
+};
+const header = Buffer.alloc(13);
+header.writeUInt32BE(1, 0);
+header.writeUInt32BE(1, 4);
+header.set([8, 2, 0, 0, 0], 8);
+const share = Buffer.concat([
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+  chunk('IHDR', header),
+  chunk('IDAT', deflateSync(Buffer.from([0, 0x11, 0x22, 0x33]))),
+  chunk('IEND', Buffer.alloc(0)),
+]);
+// The template's own brand files, left out so the fixture cannot pass on them.
+const templateBrandFiles = ['opengraph-image.png', 'opengraph-image.svg', 'icon.svg'];
 const copy = {
   en: {
     messages: {
@@ -97,11 +129,24 @@ export function writeDerivedSite(repo = '.') {
     'wrangler.jsonc',
     'tsconfig.json',
   ])
-    cpSync(resolve(repo, name), join(root, name), { recursive: true });
+    cpSync(resolve(repo, name), join(root, name), {
+      recursive: true,
+      filter: (source) =>
+        name !== 'public' ||
+        !templateBrandFiles.some((file) => source === resolve(repo, 'public', file)),
+    });
   writeFileSync(join(root, 'package.json'), JSON.stringify({ type: 'module', private: true }));
   symlinkSync(resolve(repo, 'node_modules'), join(root, 'node_modules'), 'dir');
   writeFileSync(join(root, 'src/site-data.json'), JSON.stringify(identity, null, 2));
-  writeFileSync(join(root, identity.brandAssets.logo.horizontal.replace(/^\//, 'public/')), logo);
+  for (const [path, bytes] of [
+    [identity.brandAssets.logo.horizontal, logo],
+    [identity.brandAssets.favicon, favicon],
+    [identity.brandAssets.ogImage, share],
+  ]) {
+    const file = join(root, 'public', path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, bytes);
+  }
   for (const locale of readdirSync(join(root, 'src/content')).filter((name) => name in copy)) {
     const file = join(root, `src/content/${locale}/messages.json`);
     const messages = JSON.parse(readFileSync(file, 'utf8'));

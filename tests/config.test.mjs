@@ -555,8 +555,29 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
             assert.match(html, /index,follow,max-image-preview:large/);
             assert.match(html, /data-production="true"/);
             assert.match(html, /<link rel="canonical" href="https:\/\/supplier\.co\.uk\/"/);
-            assert.match(html, /<meta property="og:locale" content="[a-z]{2}_[A-Z]{2}"/);
             const built = (file) => readFileSync(join(fixture, 'dist/client', file), 'utf8');
+            // Tests read the site config with the build's own env: the configured origin.
+            const { locales, pages, pathFor, canonical } = await loadSite(fixture, {});
+            assert.equal(canonical('en', 'home'), 'https://supplier.co.uk/');
+            const ogLocale = { en: 'en_US', es: 'es_ES' };
+            for (const locale of locales) {
+              const page = built(join(pathFor(locale, 'home'), 'index.html').slice(1));
+              assert.ok(
+                page.includes(`<link rel="canonical" href="${canonical(locale, 'home')}"`),
+                locale,
+              );
+              assert.ok(
+                page.includes(`<meta property="og:locale" content="${ogLocale[locale]}"`),
+                locale,
+              );
+              for (const other of locales.filter((other) => other !== locale))
+                assert.ok(
+                  page.includes(
+                    `<meta property="og:locale:alternate" content="${ogLocale[other]}"`,
+                  ),
+                  `${locale} alternate ${other}`,
+                );
+            }
             // A launched site must be crawlable everywhere except its endpoints.
             assert.deepEqual(built('robots.txt').trimEnd().split('\n'), [
               'User-agent: *',
@@ -568,7 +589,14 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
             const sitemap = built('sitemap.xml');
             const entries = sitemap.match(/<url>.*?<\/url>/g) || [];
             const locs = entries.map((entry) => entry.match(/<loc>([^<]+)<\/loc>/)[1]);
-            assert.ok(locs.length > 1, sitemap);
+            assert.deepEqual(
+              locs.toSorted(),
+              locales
+                .flatMap((locale) =>
+                  pages.filter((page) => page.sitemap).map(({ key }) => canonical(locale, key)),
+                )
+                .toSorted(),
+            );
             assert.ok(
               locs.every((loc) => loc.startsWith('https://supplier.co.uk/')),
               sitemap,
