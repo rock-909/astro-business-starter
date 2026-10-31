@@ -28,7 +28,7 @@ npm run verify
 
 已有 Chromium 时可指定 `CHROMIUM_PATH=/absolute/path/to/chromium npm run verify`。人名、邮箱、token 和 provider ID 都是合成测试数据。
 
-`build:test` 同时构建模板和 `tests/derived-site.mjs` 描述的派生站夹具（配置了联系方式、Logo、社交链接并改写了文案，去掉了西语、加了一个通用 About 页面，并对它单独运行 `astro check`），workerd 与浏览器测试对两份构建都运行；期望的页面、语言和文案从各自的 `src/site.ts` 与 messages 读取，所以派生站改文案、改页面、改语言不会让测试误报。浏览器测试使用本地 `127.0.0.1:4173`–`4176`（模板应用与控制服务、派生站应用与控制服务）；同一台机器并行运行多个工作副本时用 `TEST_PORT=<起始端口>` 整体移开。控制服务不进入应用构建。端口上已有服务时，本地默认直接报错而不复用，以免测到别的工作副本或旧构建；确认它服务当前构建后才可用 `PLAYWRIGHT_REUSE_EXISTING_SERVER=true` 复用。
+`build:test` 同时构建模板和 `tests/derived-site.mjs` 描述的派生站夹具（配置了联系方式、Logo、社交链接并改写了文案，去掉了西语、加了一个通用 About 页面和一个页头二级菜单，并对它单独运行 `astro check`），workerd 与浏览器测试对两份构建都运行；期望的页面、语言和文案从各自的 `src/site.ts` 与 messages 读取，所以派生站改文案、改页面、改语言不会让测试误报。浏览器测试使用本地 `127.0.0.1:4173`–`4176`（模板应用与控制服务、派生站应用与控制服务）；同一台机器并行运行多个工作副本时用 `TEST_PORT=<起始端口>` 整体移开。控制服务不进入应用构建。端口上已有服务时，本地默认直接报错而不复用，以免测到别的工作副本或旧构建；确认它服务当前构建后才可用 `PLAYWRIGHT_REUSE_EXISTING_SERVER=true` 复用。
 
 ```sh
 npm run check
