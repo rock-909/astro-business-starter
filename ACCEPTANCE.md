@@ -98,6 +98,29 @@ Node 24.22.1, dependencies from `npm ci`, `CI=1`, `TEST_PORT=5271`, Playwright's
 
 `npm run check`, `npm test` and `npm run verify` were not re-run after adding the 404 height assertion, which changes only `tests/ui.spec.ts`. None of these checks prove live providers or deployment.
 
+## Footer, theme switcher, cookie card and language pill, PR3 (2026-10-31 UTC)
+
+Node 24.22.1, dependencies from `npm ci`, `CI=1`, Playwright's cached Chromium. Counterexamples replace only the named source and rebuild with `npm run build:test`; every replacement was reverted and rebuilt before the final run.
+
+| Check | Result |
+|---|---|
+| `npm run check`, `b49e1ae` (run by the author) | PASS — 0 errors |
+| `npm run verify`, `b49e1ae`, `TEST_PORT=5273` (run by the author) | PASS — exit 0; node tests 51 pass, 0 fail; Playwright 91 passed, 5 skipped (single-language derived site) |
+| `npx prettier --check .`, `b49e1ae` (run by the author) | PASS |
+| Counterexample on `b49e1ae` (run by the author): `syncLanguageSuggestion` ignoring the cookie card (`const preferred = preferredLocale()`) | Expected FAIL — `the language pill offers the browser language once consent is settled…` on `toBeHidden`; PASS again after revert |
+| Reference search (run by the author) for the replaced theme select (`combobox`, `selectOption`, `data-theme-select` in `tests` and `src`) | No users left |
+| `npm run check`, with the in-document language choice fix | PASS — 0 errors, 0 warnings, 0 hints |
+| `npx playwright test -g "language pill\|language in the header"`, `TEST_PORT=5283`, fixed sources | PASS — 3 passed, 3 skipped (derived site has one language) |
+| `npx playwright test -g "storage refuses writes"`, `src/components/site-browser.ts` from `b49e1ae` | Expected FAIL — 1/1: pill `Received: visible` after Dismiss while `localStorage.setItem` throws |
+| `npx playwright test -g "language\|cookie\|theme\|footer"`, `TEST_PORT=5283`, fixed sources | PASS — 26 passed, 4 skipped |
+| `npx prettier --check src/components/site-browser.ts tests/ui.spec.ts` | PASS |
+| `npx playwright test -g "language pill offers"`, rebased onto `d9fa919` (page shells, #24), before the test's own Turnstile fixture | Expected FAIL — 4/4: its fresh context loaded the real Turnstile widget, and the footer Cookie settings click never reached the button (pill `Received: visible`) |
+| `npx playwright test -g "language pill" --repeat-each=3`, rebased, with the Turnstile fixture on that context | PASS — 6 passed, 6 skipped (derived site has one language) |
+| `npm run verify`, rebased onto `d9fa919`, `TEST_PORT=5273` | PASS — exit 0; node tests 53 pass, 0 fail; Playwright 96 passed, 6 skipped |
+| `npm run check` and `npx prettier --check .`, rebased | PASS — 0 errors; formatting clean |
+
+None of these checks prove live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.

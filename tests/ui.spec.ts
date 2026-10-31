@@ -91,6 +91,12 @@ async function switchLanguage(page: Page, site: Site, locale: Locale) {
 }
 // Brand names the footer gives each configured social network.
 const socialNames = { linkedin: 'LinkedIn', twitter: 'X' };
+// The footer theme switcher: one toggle button per theme, named by the theme.
+type Theme = 'system' | 'light' | 'dark';
+const themeButton = (page: Page, site: Site, locale: Locale, theme: Theme) =>
+  page
+    .getByRole('group', { name: site.messages(locale).accessibility.themeSelector })
+    .getByRole('button', { name: site.messages(locale).theme[theme], exact: true });
 const homeLocale = (site: Site) => site.locales[0];
 const secondLocale = (site: Site) => site.locales[1];
 const contactPath = (site: Site, locale: Locale) => site.pathFor(locale, 'contact');
@@ -257,9 +263,48 @@ test('configured contact methods, logo and social links render; unconfigured one
         `${socialNames[network as keyof typeof socialNames]} (${newTab})`,
       );
     }
-    await expect(footer.locator('a[href^="http"]')).toHaveCount(
+    // Social networks are the only external pages; WhatsApp is a contact method.
+    await expect(footer.locator('a[href^="http"]:not([href^="https://wa.me/"])')).toHaveCount(
       Object.values(social).filter(Boolean).length,
     );
+    // The footer names the company and lists each configured way to reach it, like the
+    // reference site; the Social column exists only when a network is configured.
+    const company = site.site.company;
+    const brandName = company?.name?.trim() || name;
+    await expect(footer.getByText(brandName, { exact: true })).toBeVisible();
+    await expect(footer).toContainText(`© ${new Date().getUTCFullYear()} ${brandName}`);
+    const footerContact = footer.locator('address');
+    if (contact.email)
+      await expect(footerContact.getByRole('link', { name: contact.email })).toHaveAttribute(
+        'href',
+        `mailto:${contact.email}`,
+      );
+    await expect(footerContact.locator('a[href^="tel:"]')).toHaveCount(contact.phone ? 1 : 0);
+    await expect(footerContact.locator('a[href^="https://wa.me/"]')).toHaveCount(
+      contact.whatsapp ? 1 : 0,
+    );
+    const footerAddress = [
+      company?.location?.address,
+      company?.location?.city,
+      company?.location?.country,
+    ]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(', ');
+    if (footerAddress) await expect(footerContact).toContainText(footerAddress);
+    if (!contact.email && !contact.phone && !contact.whatsapp && !footerAddress)
+      await expect(footerContact).toHaveCount(0);
+    // Every contact line carries its icon.
+    else
+      await expect(footerContact.locator('svg')).toHaveCount(
+        await footerContact.locator('a, p').count(),
+      );
+    const columns = site.messages(locale).footer.columns;
+    await expect(footer.getByRole('heading', { level: 2 })).toHaveText([
+      columns.navigation,
+      columns.support,
+      ...(Object.values(social).some(Boolean) ? [columns.social] : []),
+    ]);
   }
 });
 
@@ -344,8 +389,7 @@ test('theme and granular consent persist, reopen withdraws and cross-tab changes
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('cookie-consent')!).consent),
   ).toEqual({ necessary: true, analytics: true, advertising: false });
-  const theme = page.getByRole('combobox', { name: t.accessibility.themeSelector });
-  await theme.selectOption('dark');
+  await themeButton(page, site, first, 'dark').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -360,7 +404,7 @@ test('theme and granular consent persist, reopen withdraws and cross-tab changes
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('cookie-consent')!).consent),
   ).toEqual({ necessary: true, analytics: false, advertising: false });
-  await theme.selectOption('system');
+  await themeButton(page, site, first, 'system').click();
   await expect(page.locator('html')).not.toHaveAttribute('data-theme');
   await expect(page.locator('script[src*="googletagmanager"]')).toHaveCount(0);
   await sibling.close();
@@ -460,7 +504,7 @@ test('no-JS content, legal links, and secure fallback remain readable', async ({
   await expect(
     page.getByRole('button', { name: site.messages(locale).cookie.settings }),
   ).toBeHidden();
-  await expect(page.locator('[data-theme-select]')).toBeHidden();
+  await expect(page.locator('[data-theme-switcher]')).toBeHidden();
   // Like the reference site, a visit without scripts is shown light.
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   // Without the form, a configured mailbox is the way to reach the business.
@@ -675,7 +719,7 @@ test('the sticky header marks the current page, offers contact as a button, and 
   const home = site.pathFor(locale, 'home');
   await page.goto(`${home === '/' ? '' : home}/missing-offering`);
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('combobox', { name: t.accessibility.themeSelector }).selectOption(theme);
+    await themeButton(page, site, locale, theme as Theme).click();
     for (const name of [t.errors.notFound.goHome, t.footer.sections.navigation.contact]) {
       const button = page.locator('main').getByRole('link', { name, exact: true });
       await page.mouse.move(0, 0);
@@ -694,26 +738,34 @@ test('a first visit is light even on a dark system; the system and dark choices 
   page,
   site,
 }) => {
-  const t = site.messages(homeLocale(site));
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto(site.pathFor(homeLocale(site), 'home'));
   const html = page.locator('html');
-  const select = page.getByRole('combobox', { name: t.accessibility.themeSelector });
+  const pressed = async () => {
+    const result: string[] = [];
+    for (const theme of ['system', 'light', 'dark'] as const)
+      if (
+        (await themeButton(page, site, homeLocale(site), theme).getAttribute('aria-pressed')) ===
+        'true'
+      )
+        result.push(theme);
+    return result;
+  };
   const background = () =>
     page.evaluate(() => window.rgba(getComputedStyle(document.documentElement).backgroundColor));
   await expect(html).toHaveAttribute('data-theme', 'light');
-  await expect(select).toHaveValue('light');
+  expect(await pressed()).toEqual(['light']);
   const light = await background();
-  await select.selectOption('system');
+  await themeButton(page, site, homeLocale(site), 'system').click();
   await expect(html).not.toHaveAttribute('data-theme');
   expect(await background()).not.toEqual(light);
   await page.reload();
   await expect(html).not.toHaveAttribute('data-theme');
-  await expect(select).toHaveValue('system');
-  await select.selectOption('dark');
+  expect(await pressed()).toEqual(['system']);
+  await themeButton(page, site, homeLocale(site), 'dark').click();
   await page.reload();
   await expect(html).toHaveAttribute('data-theme', 'dark');
-  await expect(select).toHaveValue('dark');
+  expect(await pressed()).toEqual(['dark']);
 });
 
 test('footer links are grey without an underline and darken on hover; in-content links keep a grey underline', async ({
@@ -908,10 +960,11 @@ test('on a phone, every Tab stop up to the footer stays clear of the open cookie
       });
       if (!stop) continue;
       if (stop.inCard) break;
-      reachedFooterEnd = stop.name.startsWith('SELECT');
+      // The footer ends with the theme switcher; its last button is the dark theme.
+      reachedFooterEnd = stop.name === `BUTTON ${site.messages(locale).theme.dark}`;
       if (!stop.clear) stops.push(stop.name);
     }
-    expect(reachedFooterEnd, `${path} Tab reached the footer theme select`).toBe(true);
+    expect(reachedFooterEnd, `${path} Tab reached the footer theme switcher`).toBe(true);
     expect(stops, `${path} focus stops hidden by the cookie card`).toEqual([]);
   }
 });
@@ -931,6 +984,8 @@ test('the cookie card stays on screen at 400% zoom and in landscape, scrolling i
       await page.goto(path);
       const banner = page.locator('[data-cookie-banner]');
       await banner.getByRole('button', { name: cookie.customize, exact: true }).click();
+      // The card rises 0.5rem as it enters; measure where it comes to rest.
+      await settled(page);
       const box = (await banner.boundingBox())!;
       expect(box.y, `${path} at ${width}x${height} card top`).toBeGreaterThanOrEqual(0);
       expect(box.y + box.height).toBeLessThanOrEqual(height);
@@ -944,7 +999,7 @@ test('the cookie card stays on screen at 400% zoom and in landscape, scrolling i
   }
 });
 
-test('Customize comes last and Tab moves straight into the options it reveals', async ({
+test('Customize sits on the left but is reached last, and Tab moves straight into the options it reveals', async ({
   page,
   site,
 }) => {
@@ -952,6 +1007,17 @@ test('Customize comes last and Tab moves straight into the options it reveals', 
     const { cookie } = site.messages(locale);
     await page.goto(site.pathFor(locale, 'home'));
     const button = page.getByRole('button', { name: cookie.customize, exact: true });
+    // Shown first, like the reference site, while Reject all and Allow all share the right side.
+    const [customizeBox, rejectBox, allowBox] = await Promise.all(
+      [
+        button,
+        page.getByRole('button', { name: cookie.rejectAll, exact: true }),
+        page.getByRole('button', { name: cookie.acceptAll, exact: true }),
+      ].map(async (control) => (await control.boundingBox())!),
+    );
+    expect(customizeBox.x + customizeBox.width).toBeLessThan(rejectBox.x);
+    expect(rejectBox.x + rejectBox.width).toBeLessThan(allowBox.x);
+    expect(Math.abs(rejectBox.width - allowBox.width)).toBeLessThanOrEqual(1);
     const collapsed = await button.evaluate((element) => getComputedStyle(element).backgroundColor);
     await button.focus();
     await page.keyboard.press('Enter');
@@ -969,6 +1035,164 @@ test('Customize comes last and Tab moves straight into the options it reveals', 
       ).toBe(label);
     }
   }
+});
+
+test('the cookie card has no visible title, hugs the phone edge and floats from 640px', async ({
+  page,
+  site,
+}) => {
+  const locale = homeLocale(site);
+  const { cookie } = site.messages(locale);
+  for (const [width, place] of [
+    [375, 'edge'],
+    [800, 'right'],
+    [1280, 'left'],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(site.pathFor(locale, 'privacy'));
+    // Named for assistive tech by its label only; no heading takes up a line.
+    const banner = page.getByRole('region', { name: cookie.title });
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole('heading')).toHaveCount(0);
+    await settled(page);
+    const box = (await banner.boundingBox())!;
+    const borders = await banner.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return [style.borderTopWidth, style.borderLeftWidth];
+    });
+    // The page width without a scrollbar, which fixed overlays are laid out against.
+    const pageWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    if (place === 'edge') {
+      // Full width on the bottom edge, with only a top border.
+      expect(box).toMatchObject({ x: 0, width: pageWidth });
+      expect(box.y + box.height).toBe(800);
+      expect(borders).toEqual(['1px', '0px']);
+      // Customize is an underlined text link at the start of the row, not an outlined button.
+      const customize = banner.getByRole('button', { name: cookie.customize, exact: true });
+      const look = await customize.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.borderLeftWidth, style.paddingLeft, style.textDecorationLine];
+      });
+      expect(look).toEqual(['0px', '0px', 'underline']);
+      const decisions = banner.getByRole('button', { name: cookie.rejectAll, exact: true });
+      // First in reading order: left of the decisions, or above them when long labels wrap.
+      const [link, decide] = [(await customize.boundingBox())!, (await decisions.boundingBox())!];
+      expect(link.x < decide.x || link.y + link.height <= decide.y).toBe(true);
+    } else {
+      expect(box.width).toBe(480);
+      expect(box.y + box.height).toBe(780);
+      expect(borders).toEqual(['1px', '1px']);
+      if (place === 'right') expect(box.x + box.width).toBe(pageWidth - 20);
+      else expect(box.x).toBe(20);
+    }
+  }
+});
+
+test('the language pill offers the browser language once consent is settled, switches equivalently and stays dismissed', async ({
+  browser,
+  baseURL,
+  site,
+}) => {
+  const [first, second] = [homeLocale(site), secondLocale(site)];
+  test.skip(!second, 'single-language site: nothing to suggest');
+  const context = await browser.newContext({ baseURL, locale: first });
+  const page = await context.newPage();
+  // A fresh context misses the shared hooks; the contact form must not load the real widget.
+  await mockWidget(page);
+  await installColorProbe(page);
+  const suggested = site.messages(first).languageSuggestion;
+  const pill = page.getByRole('region', { name: suggested.label });
+  const cookie = site.messages(second!).cookie;
+  await page.goto(`${contactPath(site, second!)}?utm_source=pill#inquiry`);
+  // Never together with the cookie card: it waits for the consent choice.
+  await expect(page.getByRole('region', { name: cookie.title })).toBeVisible();
+  await expect(pill).toBeHidden();
+  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
+  // Written in the language it offers.
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute('lang', first);
+  await expect(pill).toContainText(suggested.message);
+  // Reopening cookie settings hides it again until the visitor chooses.
+  await page.getByRole('button', { name: cookie.settings, exact: true }).click();
+  await expect(pill).toBeHidden();
+  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
+  await expect(pill).toBeVisible();
+  // Centred at the bottom of the viewport.
+  await settled(page);
+  const box = (await pill.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  const pageWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  expect(Math.abs(box.x + box.width / 2 - pageWidth / 2)).toBeLessThanOrEqual(1);
+  expect(box.y + box.height).toBe(viewport.height - 20);
+  // Switching keeps the equivalent page, query and hash, and is remembered.
+  await pill.getByRole('link', { name: suggested.switchAction, exact: true }).click();
+  await expect(page).toHaveURL(`${contactPath(site, first)}?utm_source=pill#inquiry`);
+  await expect(pill).toHaveCount(0);
+  const back = site.messages(second!).languageSuggestion;
+  await page.goto(contactPath(site, second!));
+  await expect(page.getByRole('region', { name: back.label })).toHaveCount(0);
+  await expect(pill).toBeVisible();
+  // Dismissing keeps the current language and the pill stays away after a reload.
+  await pill.getByRole('button', { name: suggested.dismiss, exact: true }).click();
+  await expect(pill).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(pill).toBeHidden();
+  await context.close();
+});
+
+test('dismissing the language pill holds for the page when storage refuses writes', async ({
+  browser,
+  baseURL,
+  site,
+}) => {
+  const [first, second] = [homeLocale(site), secondLocale(site)];
+  test.skip(!second, 'single-language site: nothing to suggest');
+  const context = await browser.newContext({ baseURL, locale: first });
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException('Storage disabled', 'SecurityError');
+    };
+  });
+  const suggested = site.messages(first).languageSuggestion;
+  const pill = page.getByRole('region', { name: suggested.label });
+  const cookie = site.messages(second!).cookie;
+  await page.goto(site.pathFor(second!, 'privacy'));
+  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
+  await expect(pill).toBeVisible();
+  await pill.getByRole('button', { name: suggested.dismiss, exact: true }).click();
+  await expect(pill).toBeHidden();
+  // Reopening and settling cookie settings re-syncs the pill; the dismissal still holds.
+  await page.getByRole('button', { name: cookie.settings, exact: true }).click();
+  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
+  await expect(pill).toBeHidden();
+  await context.close();
+});
+
+test('choosing a language in the header is remembered, so the pill does not offer the one just left', async ({
+  browser,
+  baseURL,
+  site,
+}) => {
+  const [first, second] = [homeLocale(site), secondLocale(site)];
+  test.skip(!second, 'single-language site: nothing to suggest');
+  const context = await browser.newContext({ baseURL, locale: first });
+  const page = await context.newPage();
+  await installColorProbe(page);
+  await page.goto(site.pathFor(first, 'privacy'));
+  await dismissConsent(page, site);
+  await switchLanguage(page, site, second!);
+  await expect(page).toHaveURL(site.pathFor(second!, 'privacy'));
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: site.messages(first).languageSuggestion.label }),
+  ).toBeHidden();
+  // A 404 has no equivalent page in another language, so nothing is offered there.
+  await page.evaluate(() => localStorage.removeItem('preferred-locale'));
+  await page.goto(`${site.pathFor(second!, 'home')}/missing-offering`);
+  await expect(page.locator('[data-language-suggestion]')).toHaveCount(0);
+  await context.close();
 });
 
 test('choosing after reopening cookie settings hands focus back to the footer control', async ({
@@ -1412,6 +1636,7 @@ test('dark tokens match for the system preference and the explicit choice; main 
         ['--warning-foreground', '--warning-muted'],
         ['--error-foreground', '--error-muted'],
         ['--info-foreground', '--info-muted'],
+        ['--theme-switch-icon', '--background'],
       ];
       const result = Object.entries(themes).flatMap(([name, tokens]) =>
         pairs.map(([text, background]) => ({
@@ -1423,14 +1648,16 @@ test('dark tokens match for the system preference and the explicit choice; main 
     },
     { light: themes['light (system)']!, dark: themes['dark (system)']! },
   );
-  for (const { pair, ratio } of ratios) expect(ratio, pair).toBeGreaterThanOrEqual(4.5);
+  for (const { pair, ratio } of ratios)
+    // Theme switcher icons are graphics, so they need 3:1 (WCAG 1.4.11), not text contrast.
+    expect(ratio, pair).toBeGreaterThanOrEqual(pair.includes('--theme-switch-icon') ? 3 : 4.5);
   await test.info().attach('theme-token-contrast', {
     body: JSON.stringify(ratios, null, 2),
     contentType: 'application/json',
   });
 });
 
-test('the theme select shows the current theme and the header brand follows the logo configuration', async ({
+test('the theme switcher shows the current theme and the header brand follows the logo configuration', async ({
   page,
   site,
 }) => {
@@ -1438,15 +1665,15 @@ test('the theme select shows the current theme and the header brand follows the 
     const t = site.messages(locale);
     await page.goto(site.pathFor(locale, 'home'));
     await dismissConsent(page, site);
-    const select = page.getByRole('combobox', { name: t.accessibility.themeSelector });
-    await expect(select.locator('option')).toHaveText([
-      t.theme.system,
-      t.theme.light,
-      t.theme.dark,
-    ]);
+    const group = page.getByRole('group', { name: t.accessibility.themeSelector });
+    const buttons = group.getByRole('button');
+    await expect(buttons).toHaveCount(3);
+    for (const [position, name] of [t.theme.system, t.theme.light, t.theme.dark].entries())
+      await expect(buttons.nth(position)).toHaveAccessibleName(name);
     // The first language picks the theme; later ones show the choice it persisted.
-    if (index === 0) await select.selectOption('dark');
-    await expect(select.locator('option:checked')).toHaveText(t.theme.dark);
+    if (index === 0) await themeButton(page, site, locale, 'dark').click();
+    await expect(group.getByRole('button', { pressed: true })).toHaveAccessibleName(t.theme.dark);
+    await expect(group.getByRole('button', { pressed: false })).toHaveCount(2);
   }
   // The header never shows the site name; a configured logo stands alone and is inverted in
   // dark themes so a dark-on-light logo stays visible.
@@ -1458,11 +1685,7 @@ test('the theme select shows the current theme and the header brand follows the 
     await expect(logo).toBeVisible();
     expect((await logo.boundingBox())!.height).toBe(32);
     await expect(logo).toHaveCSS('filter', 'invert(1)');
-    await page
-      .getByRole('combobox', {
-        name: site.messages(site.locales.at(-1)!).accessibility.themeSelector,
-      })
-      .selectOption('light');
+    await themeButton(page, site, site.locales.at(-1)!, 'light').click();
     await expect(logo).toHaveCSS('filter', 'none');
   } else await expect(logo).toHaveCount(0);
 });
@@ -1913,9 +2136,7 @@ test('active inquiry field boundaries have at least 3:1 contrast in both themes'
   await dismissConsent(page, site);
   const measurements = [];
   for (const theme of ['light', 'dark']) {
-    await page
-      .getByRole('combobox', { name: site.messages(locale).accessibility.themeSelector })
-      .selectOption(theme);
+    await themeButton(page, site, locale, theme as Theme).click();
     for (const name of ['fullName', 'email', 'message']) {
       const field = page.locator(`[name="${name}"]`);
       await expect(field).toBeEditable();

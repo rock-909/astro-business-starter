@@ -907,7 +907,7 @@ test('a derived site with its own logo and social links renders them without tem
     assert.doesNotMatch(html, /brand-mark/, file);
     // Social links read as brand names; the arrow is decorative and the new tab is announced.
     const spoken = (href) => {
-      const link = html.match(new RegExp(`<a href="${escape(href)}"[^>]*>([\\s\\S]*?)</a>`));
+      const link = html.match(new RegExp(`<a [^>]*href="${escape(href)}"[^>]*>([\\s\\S]*?)</a>`));
       assert.ok(link, `${file} links ${href}`);
       assert.match(link[0], /target="_blank"/);
       assert.match(link[1], /<span aria-hidden="true">↗<\/span>/);

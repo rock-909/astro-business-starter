@@ -27,6 +27,12 @@
     "rejectAll": "Rechazar todo",
     "settings": "Configuración de cookies"
   },
+  "languageSuggestion": {
+    "label": "Sugerencia de idioma",
+    "message": "Esta página está disponible en español.",
+    "switchAction": "Cambiar a español",
+    "dismiss": "Cerrar"
+  },
   "structured-data": {
     "website": {
       "description": "Sitio de referencia para consultas"
@@ -52,7 +58,8 @@
   "footer": {
     "columns": {
       "navigation": "Sitio",
-      "support": "Legal"
+      "support": "Legal",
+      "social": "Redes sociales"
     },
     "sections": {
       "navigation": {
