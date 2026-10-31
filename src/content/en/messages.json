@@ -73,6 +73,7 @@
   },
   "contact": {
     "panel": {
+      "intro": "You can also contact us directly.",
       "contactTitle": "Email & inquiry",
       "unconfiguredMailbox": "No business mailbox has been configured for this reference site."
     }
@@ -88,6 +89,10 @@
       "submitting": "Sending…",
       "success": "Received. The team can review your inquiry and respond with the next useful step or the details still needed.",
       "referenceLabel": "Reference",
+      "statusPrefix": {
+        "success": "Done:",
+        "error": "Error:"
+      },
       "privacyNotice": "By submitting this form, you agree to our {privacy} and {terms}.",
       "noJsExplanation": "The secure inquiry form needs JavaScript because bot verification cannot run without it.",
       "noJsEmailPrefix": "Email us directly at",

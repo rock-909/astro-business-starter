@@ -7,6 +7,7 @@
   --border: #ced4c9;
   --input-border: #7a887e;
   --primary: #174d48;
+  --primary-hover: #0f3b37;
   --on-primary: #fffdf7;
   --soft: #e8eee4;
   --error: #a32825;
@@ -35,6 +36,7 @@
   --border: #3a4e44;
   --input-border: #718d7d;
   --primary: #b3ddc7;
+  --primary-hover: #9fd1b7;
   --on-primary: #12291f;
   --soft: #243b31;
   --error: #ffb8ae;
@@ -51,6 +53,7 @@
     --border: #3a4e44;
     --input-border: #718d7d;
     --primary: #b3ddc7;
+    --primary-hover: #9fd1b7;
     --on-primary: #12291f;
     --soft: #243b31;
     --error: #ffb8ae;
@@ -98,8 +101,11 @@ summary {
   outline: 3px solid var(--focus);
   outline-offset: 4px;
 }
-a:hover {
+a:is(:hover, :active) {
   text-decoration-thickness: 2px;
+}
+a.brand:is(:hover, :active) {
+  text-decoration: underline;
 }
 button:disabled {
   cursor: not-allowed;
@@ -171,10 +177,21 @@ button:disabled {
   font-size: 14px;
 }
 .main-nav a {
-  text-decoration: none;
   white-space: nowrap;
 }
-.main-nav a[aria-current='page'] {
+/* One current-state rule for both header navs: foreground plus a 2px underline; others underline on hover. */
+.main-nav a,
+.language-nav a {
+  text-decoration: none;
+}
+.main-nav a:is(:hover, :active),
+.language-nav a:is(:hover, :active) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+.main-nav a[aria-current='page'],
+.language-nav a[aria-current='page'] {
+  color: var(--foreground);
   text-decoration: underline;
   text-decoration-thickness: 2px;
 }
@@ -188,10 +205,6 @@ button:disabled {
 }
 .language-nav a {
   padding: 8px 0;
-}
-.language-nav [aria-current='page'] {
-  font-weight: 700;
-  text-decoration: none;
 }
 .experiment-strip {
   font-size: 12px;
@@ -285,9 +298,16 @@ p {
   background: transparent;
   border-color: var(--border);
 }
-.button:hover {
-  filter: brightness(0.96);
-  text-decoration: none;
+.button:not(:disabled):is(:hover, :active) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+.button.secondary:not(:disabled):is(:hover, :active) {
+  background: var(--soft);
+  border-color: var(--input-border);
+}
+.button:not(:disabled):active {
+  transform: translateY(1px);
 }
 .button.small {
   font-size: 13px;
@@ -444,8 +464,12 @@ textarea[aria-invalid='true'] {
   margin: 20px 0;
   overflow-wrap: anywhere;
 }
+.form-status[data-state] {
+  border-left: 3px solid var(--primary);
+}
 .form-status[data-state='error'] {
   color: var(--error);
+  border-left-color: var(--error);
 }
 .verification {
   font-size: 13px;
@@ -532,11 +556,17 @@ textarea[aria-invalid='true'] {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.text-button:is(:hover, :active) {
+  text-decoration-thickness: 2px;
+}
 .theme-select {
   width: auto;
   min-height: 40px;
   font-size: 12px;
   padding: 8px 28px 8px 12px;
+}
+.theme-select:is(:hover, :active) {
+  background: var(--soft);
 }
 .cookie-banner {
   position: fixed;
@@ -600,6 +630,11 @@ input[type='checkbox'] {
 }
 .not-found h1 {
   font-size: clamp(40px, 6vw, 72px);
+}
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 @media (max-width: 760px) {
   .wrap {

@@ -34,6 +34,9 @@ const address = [
 ]
   .filter(Boolean)
   .join(', ');
+const hasContactMethods = Boolean(
+  site.contact.email || site.contact.phone || site.contact.whatsapp || address,
+);
 ---
 
 <SiteLayout locale={locale} page={page} title={title} description={description}>
@@ -44,7 +47,6 @@ const address = [
       <p class="hero-copy">{t.home.description}</p>
       <a class="button" href={pathFor(locale, 'contact')}>
         {t.home.contactLink}
-        <span aria-hidden="true">↗</span>
       </a>
       <div class="hero-rule">
         <strong>{t.home.ruleLabel}</strong>
@@ -62,8 +64,8 @@ const address = [
         <InquiryForm locale={locale} />
         <aside class="contact-aside">
           <h2>{t.contact.panel.contactTitle}</h2>
-          <p>{t.inquiry.form.messageHint}</p>
-          {(site.contact.email || site.contact.phone || site.contact.whatsapp || address) && (
+          {hasContactMethods && <p>{t.contact.panel.intro}</p>}
+          {hasContactMethods && (
             <div class="contact-methods">
               {site.contact.email && (
                 <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>

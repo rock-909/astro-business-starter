@@ -89,8 +89,14 @@ test('unknown routes give localized 404 recovery rather than false business page
   expect(response?.status()).toBe(404);
   await expect(page.locator('html')).toHaveAttribute('lang', 'es');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Página no encontrada');
+  await expect(
+    page.locator('main').getByRole('link', { name: 'Contacto', exact: true }),
+  ).toHaveAttribute('href', '/es/contact');
   await page.getByRole('link', { name: 'Volver al inicio' }).click();
   await expect(page).toHaveURL(/\/es$/);
+  await page.goto('/missing-offering');
+  await page.locator('main').getByRole('link', { name: 'Contact', exact: true }).click();
+  await expect(page).toHaveURL(/\/contact$/);
 });
 
 test('locale switch preserves route, query, hash and unsent buyer fields', async ({ page }) => {
@@ -172,6 +178,9 @@ test('EN and ES browser submissions reach the real Action and require fresh veri
       .click();
     expect(JSON.parse((await request).postData()!).fullName).toBe('Browser Buyer');
     await expect(page.locator('[data-form-status]')).toContainText('INQ-');
+    await expect(page.locator('[data-form-status] strong')).toHaveText(
+      locale === 'en' ? 'Done:' : 'Listo:',
+    );
     await expect(
       page.getByLabel(locale === 'en' ? 'Full name' : 'Nombre completo', { exact: true }),
     ).toHaveValue('');
@@ -290,7 +299,8 @@ test('mobile layout is keyboard usable and has no horizontal overflow', async ({
     'Privacy Policy',
     'Terms of Service',
   ]);
-  await expect(page.locator('[data-submit]')).toHaveText(/^Send inquiry\s*↗$/);
+  // In-site links and buttons carry no external-link arrow; only new-tab social links do.
+  await expect(page.locator('[data-submit]')).toHaveText('Send inquiry');
   await page.screenshot({ path: 'test-results/contact-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
@@ -336,6 +346,74 @@ test('a long company email fits phone widths, keeps the compact widget and keeps
   // Wide screens keep the direct contact column on the left of the form.
   await page.setViewportSize({ width: 1280, height: 900 });
   expect((await asideEmail.boundingBox())!.x).toBeLessThan((await fullName.boundingBox())!.x);
+});
+
+test('header marks the current page and language alike; links and buttons react to hover in both themes', async ({
+  page,
+}) => {
+  const decoration = (selector: string) =>
+    page.locator(selector).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return `${style.textDecorationLine} ${style.textDecorationThickness}`;
+    });
+  await page.goto('/');
+  await dismissConsent(page);
+  // Current items: foreground colour and a 2px underline; the others stay plain until hover.
+  for (const selector of ['.main-nav a[href="/"]', '.language-nav a[lang="en"]'])
+    expect(await decoration(selector)).toBe('underline 2px');
+  for (const selector of [
+    '.main-nav a[href="/contact"]',
+    '.language-nav a[lang="es"]',
+    'a.brand',
+  ]) {
+    expect(await decoration(selector)).toMatch(/^none /);
+    await page.locator(selector).hover();
+    expect(await decoration(selector)).toMatch(/^underline /);
+  }
+  await expect(page.locator('.main-nav')).not.toContainText('↗');
+
+  const contrast = (selector: string) =>
+    page.locator(selector).evaluate((element) => {
+      const luminance = (color: string) => {
+        const channels = color
+          .match(/[\d.]+/g)!
+          .slice(0, 3)
+          .map((value) => {
+            const channel = Number(value) / 255;
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+        return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+      };
+      const style = getComputedStyle(element);
+      const [light, dark] = [luminance(style.color), luminance(style.backgroundColor)].sort(
+        (a, b) => b - a,
+      );
+      return { background: style.backgroundColor, ratio: (light! + 0.05) / (dark! + 0.05) };
+    });
+  await page.goto('/missing-offering');
+  for (const theme of ['light', 'dark']) {
+    await page.getByRole('combobox', { name: 'Theme selector' }).selectOption(theme);
+    for (const name of ['Back to homepage', 'Contact']) {
+      const button = page.locator('main').getByRole('link', { name, exact: true });
+      await page.mouse.move(0, 0);
+      const resting = await button.evaluate((element) => getComputedStyle(element).backgroundColor);
+      await button.hover();
+      const hovered = await contrast(`.not-found-actions a:hover`);
+      expect(hovered.background, `${theme} ${name}`).not.toBe(resting);
+      expect(hovered.ratio, `${theme} ${name}`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
+test('contact aside has its own line instead of repeating the message hint', async ({ page }) => {
+  for (const [path, hint] of [
+    ['/contact', 'Share your requirement'],
+    ['/es/contact', 'Comparte tus requisitos'],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.locator('#message-hint')).toContainText(hint);
+    await expect(page.locator('.contact-aside')).not.toContainText(hint);
+  }
 });
 
 test('long words in headings wrap at 320px instead of widening the page', async ({ page }) => {
@@ -744,6 +822,7 @@ test('server canonical validation maps an email rejection to localized field and
     page.getByText('Introduce una dirección de correo válida', { exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toBeFocused();
+  await expect(page.locator('[data-form-status] strong')).toHaveText('Error:');
   await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toHaveValue(
     '+buyer@example.test',
   );
