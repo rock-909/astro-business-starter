@@ -229,7 +229,10 @@ test('unknown routes give localized 404 recovery rather than false business page
       exact: true,
     });
     await expect(contact).toHaveAttribute('href', contactPath(site, locale));
-    await page.getByRole('link', { name: notFound.goHome }).click();
+    const goHome = page.getByRole('link', { name: notFound.goHome });
+    expect((await goHome.boundingBox())!.height).toBe(40);
+    expect((await contact.boundingBox())!.height).toBe(40);
+    await goHome.click();
     await expect(page).toHaveURL(home);
     await page.goto(`${home === '/' ? '' : home}/missing-offering`);
     await contact.click();
