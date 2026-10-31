@@ -3,5 +3,8 @@
   "name": "astro-business-starter",
   "compatibility_date": "2026-10-19",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": false },
+  // Keep the Worker's own console lines (reference IDs and categories, never buyer
+  // fields) as the delivery record; request-level invocation logs and traces stay off.
+  // Retention and cost: LAUNCH.md.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } },
 }

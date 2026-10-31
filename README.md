@@ -46,7 +46,7 @@ npm run test:browser
 | `src/site-data.json` | 名称、公开联系/社交、品牌资源、SEO、身份/法律确认标记 |
 | `src/content/en`、`src/content/es` | 双语文案、联系与法律正文 |
 | `src/styles/global.css` | 设计 token、响应式布局、焦点与主题样式 |
-| `.env.example` | 公开域名、Turnstile site key、可选 GA 配置 |
+| `.env.example` | 公开域名、Turnstile site key、可选 GA 与搜索验证配置 |
 | `.dev.vars.example` | 服务端绑定名称；不要提交真实 secret |
 | `src/actions/index.ts`、`src/lib/inquiry.ts` | 唯一询盘 Action、验证与独立双通道交付 |
 
@@ -59,9 +59,7 @@ npm run readiness
 PUBLIC_APP_ENV=production npm run build
 ```
 
-默认占位内容及缺失配置会让这两项检查**拒绝上线**。上线前应替换真实身份/域名/资源，审阅双语法律文案，配置受限凭证并单独验证真实服务。静态配置检查不能证明凭证有效、邮件到达、CRM 持久化或部署成功。本项目没有自动部署流程。
-
-`readiness` 读取 production mode 的 dotenv 配置及 shell；生产构建按实际 build mode 检查。现有前提检查仍要求所列服务端配置在检查进程可见，但不会由此证明它们已绑定到 Cloudflare，也不把 secret 放入公开构建变量。部署时仍须独立配置 Worker bindings。
+默认占位身份、模板文案、所配品牌文件缺失及缺失配置会让这两项检查**拒绝上线**；通过也不能证明凭证有效、Cloudflare 已绑定、邮件到达、CRM 持久化或部署成功。本项目没有自动部署流程。上线步骤、Worker bindings、供应商与域名设置、上线证据和交接见 [LAUNCH.md](LAUNCH.md)。
 
 ## 关键行为
 
@@ -76,7 +74,7 @@ PUBLIC_APP_ENV=production npm run build
 
 ## 编码规则
 
-`AGENTS.md` 是项目总则，`.claude/rules/` 的五份文件是按实际路径分层的领域约束。支持 `paths` 的工具按文件加载；Codex 等其他工具按 AGENTS 索引主动读取相关规则，不复制第二套正文。实际 Claude CLI 加载尚未验证，因此未加入无条件 `CLAUDE.md` 桥接，也不把 glob 校验当作工具加载证明。
+`AGENTS.md` 是项目总则，`.claude/rules/` 的六份文件是按实际路径分层的领域约束。支持 `paths` 的工具按文件加载；Codex 等其他工具按 AGENTS 索引主动读取相关规则，不复制第二套正文。实际 Claude CLI 加载尚未验证，因此未加入无条件 `CLAUDE.md` 桥接，也不把 glob 校验当作工具加载证明。
 
 ## 真实服务与发布边界
 

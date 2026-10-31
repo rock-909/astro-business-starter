@@ -31,6 +31,23 @@ The audit fixes environment/readiness and optional company configuration, curren
 
 Markdown, YAML, `.claude/` and the lockfile are excluded by `.prettierignore`. The reformat commit is mechanical `prettier --write .` output; the build, node and browser regression results for it come from the `verify` run, not from this section.
 
+## Launch-safety readiness and Workers Logs (2026-10-30 UTC)
+
+Node 24.22.1, dependencies from `npm ci`. "Before" runs replace only `scripts/readiness.mjs` with the named revision and keep the current tests.
+
+| Check | Result |
+|---|---|
+| `node --test --test-name-pattern="readiness rejects (shipped template\|configured root)" tests/config.test.mjs` | PASS — 2 tests |
+| Same, `scripts/readiness.mjs` from base `ca6eea6` | Expected FAIL — template-copy test (no `messages`/`contact` issues reported) and brand-file test (`[]` instead of the three `brandAssets.ogImage`/`favicon`/`logo.horizontal` issues) |
+| Same, `scripts/readiness.mjs` from `31fbab3` (whole-file `contact.ts` match) | Expected FAIL — template-copy test |
+| `contact.ts` rewritten (with `import type` and `satisfies`) but keeping the comment `// Replaced reference site copy`, through `readinessIssues` | `31fbab3`: `en/contact` and `es/contact` reported; fixed: none |
+| `node --test --test-name-pattern="real Astro builds" tests/config.test.mjs` | PASS — 5 real builds, including the ready production build with the rewritten `contact.ts` |
+| `npm run readiness` on the template | Expected exit 1 — lists each `en/contact` and `es/contact` string with template copy, among other issues |
+| `wrangler.jsonc` through Wrangler 4.153.0 `unstable_readConfig` | `observability` = `{"enabled":true,"logs":{"invocation_logs":false}}`, no warnings; a copy with the typo `invocation_log` warns `Unexpected fields found in observability field` |
+| Reference search (`git grep -n "observability\\|invocation_logs"`) | Only `wrangler.jsonc`; retention and cost in `LAUNCH.md` section 6 |
+
+`npm run verify` was not run in this fix round. None of these checks prove live Workers Logs, provider delivery or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.

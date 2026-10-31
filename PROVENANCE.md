@@ -31,9 +31,9 @@ The lockfile retains the complete dependency tree, registry locations, integrity
 | @emnapi/runtime (peer required by `@astrojs/check`'s WASM runtime) | 1.11.3 | MIT |
 | @playwright/test | 1.64.1 | Apache-2.0 |
 | typescript | 6.0.3 | Apache-2.0 |
-| wrangler | 4.152.0 | MIT OR Apache-2.0 |
-| miniflare (Wrangler transitive) | 5.20261019.2-beta | MIT |
-| workerd (transitive) | 1.20261019.1 | Apache-2.0 |
+| wrangler | 4.153.0 | MIT OR Apache-2.0 |
+| miniflare (Wrangler transitive) | 5.20261023.0-beta | MIT |
+| workerd (Miniflare transitive) | 1.20261023.1 | Apache-2.0 |
 
 Local browser verification used Chromium headless-shell 153.0.8010.0 supplied by `@sparticuz/chromium` 153.0.0. Neither that tooling nor its binaries are part of this project's dependency graph or source archive; Chromium has its own upstream notices.
 
