@@ -30,6 +30,19 @@ const json = (body, status = 200) =>
     status,
     headers: { 'content-type': 'application/json' },
   });
+// Every external boundary accepts; tests change one field at a time.
+export const defaultState = () => ({
+  calls: [],
+  logs: [],
+  rateCount: 1,
+  rateTtl: 60000,
+  rate: 'accept',
+  turnstile: 'accept',
+  email: 'accept',
+  airtable: 'accept',
+  delay: 0,
+  onDelivery: null,
+});
 // The shared suites send many requests from one fixture IP, so the native limiter
 // gets a high default; pass nativeLimit: 'deployed' to use the wrangler.jsonc limit.
 export async function startHarness({
@@ -52,18 +65,7 @@ export async function startHarness({
       },
     ]),
   );
-  const state = {
-    calls: [],
-    logs: [],
-    rateCount: 1,
-    rateTtl: 60000,
-    rate: 'accept',
-    turnstile: 'accept',
-    email: 'accept',
-    airtable: 'accept',
-    delay: 0,
-    onDelivery: null,
-  };
+  const state = defaultState();
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       name: 'astro-business-starter-test',

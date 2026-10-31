@@ -1,6 +1,15 @@
 import { createServer } from 'node:http';
-import { startHarness } from './harness.mjs';
-const harness = await startHarness({ port: 4173 });
+import { parseArgs } from 'node:util';
+import { defaultState, startHarness } from './harness.mjs';
+// playwright.config.ts passes the ports and the build to serve.
+const { values: options } = parseArgs({
+  options: {
+    port: { type: 'string', default: '4173' },
+    'control-port': { type: 'string', default: '4174' },
+    root: { type: 'string', default: '.' },
+  },
+});
+const harness = await startHarness({ port: Number(options.port), root: options.root });
 // Test control is a separate loopback-only Node server, NOT an Astro route or
 // Worker binding. Neither this server nor any fake credentials enter dist/.
 const control = createServer(async (request, response) => {
@@ -23,17 +32,7 @@ const control = createServer(async (request, response) => {
   }
   try {
     const data = JSON.parse(body);
-    if (data.reset)
-      Object.assign(harness.state, {
-        calls: [],
-        rateCount: 1,
-        rateTtl: 60000,
-        rate: 'accept',
-        turnstile: 'accept',
-        email: 'accept',
-        airtable: 'accept',
-        delay: 0,
-      });
+    if (data.reset) Object.assign(harness.state, defaultState());
     for (const key of ['rateCount', 'rateTtl', 'rate', 'turnstile', 'email', 'airtable', 'delay'])
       if (key in data) harness.state[key] = data[key];
     response.writeHead(204).end();
@@ -41,8 +40,11 @@ const control = createServer(async (request, response) => {
     response.writeHead(400).end();
   }
 });
-await new Promise((resolve) => control.listen(4174, '127.0.0.1', resolve));
-console.log(`Mocked workerd app: ${harness.url}; test-only control: http://127.0.0.1:4174`);
+const controlPort = Number(options['control-port']);
+await new Promise((resolve) => control.listen(controlPort, '127.0.0.1', resolve));
+console.log(
+  `Mocked workerd app (${options.root}): ${harness.url}; test-only control: http://127.0.0.1:${controlPort}`,
+);
 async function stop() {
   control.close();
   await harness.close();

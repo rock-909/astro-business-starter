@@ -1,5 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Site } from './site-test';
 
+type Locale = Site['locales'][number];
 const widgetScript = `window.turnstile={render(el,options){window.__turnstileOptions=options;el.style.display='block';el.style.width=options.size==='compact'?'150px':'300px';const button=document.createElement('button');button.type='button';button.textContent='[Test] Complete verification';button.onclick=()=>options.callback('fixture-token');el.append(button);options.callback('fixture-token');return 'fixture-widget';},reset(){}};`;
 async function mockWidget(page: Page) {
   await page.route(
@@ -10,30 +11,68 @@ async function mockWidget(page: Page) {
 }
 // A widget still waiting for its challenge: it renders but has not produced a token yet.
 const pendingWidgetScript = `window.turnstile={render(el,options){window.__turnstileOptions=options;el.style.display='block';el.style.width=options.size==='compact'?'150px':'300px';return 'fixture-widget';},reset(){}};`;
-// The template ships without a company email; launched sites must configure one (readiness).
-// Render the configured contact blocks with a long unbreakable address, as a derived site would.
+// Render the contact blocks with a long unbreakable address: the template ships without a
+// company email (launched sites must configure one), a derived site already has one.
 const longEmail = 'internationalsales@guangzhouhengtaimachinery.com';
-async function withLongCompanyEmail(page: Page) {
-  await page.route('**/contact', async (route) => {
-    if (route.request().resourceType() !== 'document') return route.continue();
-    const response = await route.fetch();
-    const link = `<a href="mailto:${longEmail}">${longEmail}</a>`;
-    const html = (await response.text())
-      .replace(
-        /<p>(No business mailbox[^<]*|No se ha configurado un correo[^<]*)<\/p>/,
-        `<div class="contact-methods">${link}</div>`,
-      )
-      .replace('</form>', `</form><p class="fallback">${link}</p>`);
-    await route.fulfill({ response, body: html });
-  });
+const htmlEntities: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#39;',
+  '"': '&quot;',
+};
+// Astro escapes text the same way before it reaches the HTML.
+const escapeHtml = (text: string) => text.replace(/[&<>'"]/g, (char) => htmlEntities[char]);
+async function withLongCompanyEmail(page: Page, site: Site) {
+  const contactPaths = site.locales.map((locale) => site.pathFor(locale, 'contact'));
+  await page.route(
+    (url) => contactPaths.includes(url.pathname),
+    async (route) => {
+      if (route.request().resourceType() !== 'document') return route.continue();
+      const response = await route.fetch();
+      const link = `<a href="mailto:${longEmail}">${longEmail}</a>`;
+      const methods = `<div class="contact-methods">${link}</div>`;
+      let html = await response.text();
+      const unconfigured = site.locales
+        .map(
+          (locale) =>
+            `<p>${escapeHtml(site.messages(locale).contact.panel.unconfiguredMailbox)}</p>`,
+        )
+        .find((paragraph) => html.includes(paragraph));
+      const configured = /<div class="contact-methods">[\s\S]*?<\/div>/;
+      if (configured.test(html)) {
+        html = html.replace(configured, methods);
+        if (unconfigured) html = html.replace(unconfigured, '');
+      } else if (unconfigured) html = html.replace(unconfigured, methods);
+      else html = html.replace('</aside>', `${methods}</aside>`);
+      if (!/class="fallback"[^>]*>[^<]*<a href="mailto:/.test(html))
+        html = html.replace('</form>', `</form><p class="fallback">${link}</p>`);
+      await route.fulfill({ response, body: html });
+    },
+  );
 }
-async function dismissConsent(page: Page) {
-  const reject = page.getByRole('button', { name: /^(Reject all|Rechazar todo)$/ });
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+async function dismissConsent(page: Page, site: Site) {
+  const names = site.locales.map((locale) => escapeRegExp(site.messages(locale).cookie.rejectAll));
+  const reject = page.getByRole('button', { name: new RegExp(`^(${names.join('|')})$`) });
   if (await reject.isVisible()) await reject.click();
 }
+// Expected wording comes from the site's own copy, never from the template's.
+const form = (site: Site, locale: Locale) => site.messages(locale).inquiry.form;
+const messageLabel = (site: Site, locale: Locale) =>
+  `${form(site, locale).message} (${form(site, locale).optional})`;
+// The language switcher shows each language's upper-case code and speaks its own name.
+const languageNames: Record<string, string> = { en: 'English', es: 'Español' };
+const languageLink = (page: Page, locale: Locale) =>
+  page.getByRole('link', { name: languageNames[locale], exact: true });
+// Brand names the footer gives each configured social network.
+const socialNames = { linkedin: 'LinkedIn', twitter: 'X' };
+const homeLocale = (site: Site) => site.locales[0];
+const secondLocale = (site: Site) => site.locales[1];
+const contactPath = (site: Site, locale: Locale) => site.pathFor(locale, 'contact');
 
-test.beforeEach(async ({ page, request }) => {
-  await request.post('http://127.0.0.1:4174', { data: { reset: true } });
+test.beforeEach(async ({ page, request, controlURL }) => {
+  await request.post(controlURL, { data: { reset: true } });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   (page as unknown as { unexpectedErrors: string[] }).unexpectedErrors = errors;
@@ -43,219 +82,276 @@ test.afterEach(async ({ page }) => {
   expect((page as unknown as { unexpectedErrors: string[] }).unexpectedErrors).toEqual([]);
 });
 
-test('all eight source pages have localized HTML, reciprocal SEO and truthful noindex', async ({
+test('every configured page has localized HTML, reciprocal SEO and truthful noindex', async ({
   page,
+  site,
 }) => {
-  const definitions = [
-    ['/', 'en', 'Inquiry site'],
-    ['/contact', 'en', 'Contact'],
-    ['/privacy', 'en', 'Privacy policy — to be completed'],
-    ['/terms', 'en', 'Terms — to be completed'],
-    ['/es', 'es', 'Sitio de consultas'],
-    ['/es/contact', 'es', 'Contacto'],
-    ['/es/privacy', 'es', 'Privacidad — pendiente de completar'],
-    ['/es/terms', 'es', 'Condiciones — pendientes de completar'],
-  ];
-  for (const [path, locale, heading] of definitions) {
-    const response = await page.goto(path!);
-    expect(response?.status()).toBe(200);
-    expect(response?.request().redirectedFrom()).toBeNull();
-    await expect(page.locator('html')).toHaveAttribute('lang', locale!);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading!);
-    expect(await page.locator('main').count()).toBe(1);
-    const canonical = await page.locator('link[rel=canonical]').getAttribute('href');
-    expect(new URL(canonical!).pathname).toBe(path);
-    await expect(page.locator('link[hreflang=en]')).toHaveCount(1);
-    await expect(page.locator('link[hreflang=es]')).toHaveCount(1);
-    await expect(page.locator('link[hreflang=x-default]')).toHaveCount(1);
-    await expect(page.locator('meta[name=robots]')).toHaveAttribute('content', 'noindex,nofollow');
-    const graph = JSON.parse(await page.locator('script[type="application/ld+json"]').innerHTML());
-    expect(
-      graph['@graph'].some((node: { '@type': string }) => node['@type'] === 'Organization'),
-    ).toBe(false);
-    expect(graph['@graph'].some((node: { '@type': string }) => node['@type'] === 'WebSite')).toBe(
-      true,
+  const company = site.site.company?.name?.trim();
+  for (const locale of site.locales) {
+    for (const { key } of site.pages) {
+      const path = site.pathFor(locale, key);
+      const heading =
+        key === 'home'
+          ? site.messages(locale).home.title
+          : site.pageContent(locale, key).metadata.title;
+      const response = await page.goto(path);
+      expect(response?.status(), path).toBe(200);
+      expect(response?.request().redirectedFrom(), `${path} must not redirect`).toBeNull();
+      await expect(page.locator('html')).toHaveAttribute('lang', locale);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+      expect(await page.locator('main').count()).toBe(1);
+      const canonical = await page.locator('link[rel=canonical]').getAttribute('href');
+      expect(new URL(canonical!).pathname).toBe(path);
+      for (const language of site.locales)
+        await expect(page.locator(`link[hreflang=${language}]`)).toHaveCount(1);
+      await expect(page.locator('link[hreflang=x-default]')).toHaveCount(1);
+      await expect(page.locator('meta[name=robots]')).toHaveAttribute(
+        'content',
+        'noindex,nofollow',
+      );
+      const graph: Array<{ '@type': string; name?: string }> = JSON.parse(
+        await page.locator('script[type="application/ld+json"]').innerHTML(),
+      )['@graph'];
+      // Organization facts appear only when the owner configured a company.
+      const organization = graph.find((node) => node['@type'] === 'Organization');
+      if (company) expect(organization?.name).toBe(site.site.company!.name);
+      else expect(organization).toBeUndefined();
+      expect(graph.some((node) => node['@type'] === 'WebSite')).toBe(true);
+    }
+  }
+});
+
+test('configured contact methods, logo and social links render; unconfigured ones stay absent', async ({
+  page,
+  site,
+}) => {
+  const { contact, social, brandAssets, name } = site.site;
+  const digits = (value: string) => value.replace(/\D/g, '');
+  for (const locale of site.locales) {
+    await page.goto(contactPath(site, locale));
+    const main = page.getByRole('main');
+    if (contact.email)
+      // Scoped to the contact aside: the form's fallback line repeats the mailbox and
+      // would otherwise hide a missing contact method.
+      await expect(
+        main.locator('.contact-aside').getByRole('link', { name: contact.email, exact: true }),
+      ).toHaveAttribute('href', `mailto:${contact.email}`);
+    else await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+    const phone = main.locator('a[href^="tel:"]');
+    if (contact.phone) {
+      await expect(phone).toHaveText(contact.phone);
+      expect(digits((await phone.getAttribute('href'))!)).toBe(digits(contact.phone));
+    } else await expect(phone).toHaveCount(0);
+    const whatsapp = main.locator('a[href^="https://wa.me/"]');
+    if (contact.whatsapp) {
+      await expect(whatsapp).toContainText(contact.whatsapp);
+      // wa.me takes the international number as bare digits.
+      await expect(whatsapp).toHaveAttribute('href', `https://wa.me/${digits(contact.whatsapp)}`);
+    } else await expect(whatsapp).toHaveCount(0);
+
+    const logo = page.getByRole('banner').getByRole('img', { name, exact: true });
+    if (brandAssets.logo?.status === 'ready') {
+      await expect(logo).toHaveAttribute('src', brandAssets.logo.horizontal);
+      // The configured file must actually be served, not just referenced.
+      await expect
+        .poll(() => logo.evaluate((image: HTMLImageElement) => image.naturalWidth))
+        .toBeGreaterThan(0);
+    } else {
+      await expect(logo).toHaveCount(0);
+      await expect(page.getByRole('banner').locator('.brand .brand-mark')).toBeVisible();
+    }
+
+    const footer = page.getByRole('contentinfo');
+    const newTab = site.messages(locale).accessibility.opensInNewTab;
+    for (const [network, href] of Object.entries(social)) {
+      if (!href) continue;
+      const link = footer.locator(`a[href="${href}"]`);
+      await expect(link).toHaveCount(1);
+      await expect(link).toHaveAttribute('rel', /noopener/);
+      // Read as the network's name; the arrow is decorative and the new tab is announced.
+      await expect(link).toHaveAccessibleName(
+        `${socialNames[network as keyof typeof socialNames]} (${newTab})`,
+      );
+    }
+    await expect(footer.locator('a[href^="http"]')).toHaveCount(
+      Object.values(social).filter(Boolean).length,
     );
   }
 });
 
 test('unknown routes give localized 404 recovery rather than false business pages', async ({
   page,
+  site,
 }) => {
-  let response = await page.goto('/missing-offering');
-  expect(response?.status()).toBe(404);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Page not found');
-  response = await page.goto('/es/missing-offering');
-  expect(response?.status()).toBe(404);
-  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Página no encontrada');
-  await expect(
-    page.locator('main').getByRole('link', { name: 'Contacto', exact: true }),
-  ).toHaveAttribute('href', '/es/contact');
-  await page.getByRole('link', { name: 'Volver al inicio' }).click();
-  await expect(page).toHaveURL(/\/es$/);
-  await page.goto('/missing-offering');
-  await page.locator('main').getByRole('link', { name: 'Contact', exact: true }).click();
-  await expect(page).toHaveURL(/\/contact$/);
+  for (const locale of site.locales) {
+    const home = site.pathFor(locale, 'home');
+    const notFound = site.messages(locale).errors.notFound;
+    const response = await page.goto(`${home === '/' ? '' : home}/missing-offering`);
+    expect(response?.status()).toBe(404);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(notFound.title);
+    const contact = page.locator('main').getByRole('link', {
+      name: site.messages(locale).footer.sections.navigation.contact,
+      exact: true,
+    });
+    await expect(contact).toHaveAttribute('href', contactPath(site, locale));
+    await page.getByRole('link', { name: notFound.goHome }).click();
+    await expect(page).toHaveURL(home);
+    await page.goto(`${home === '/' ? '' : home}/missing-offering`);
+    await contact.click();
+    await expect(page).toHaveURL(contactPath(site, locale));
+  }
 });
 
-test('locale switch preserves route, query, hash and unsent buyer fields', async ({ page }) => {
-  await page.goto('/contact?utm_source=locale-test#inquiry');
-  await dismissConsent(page);
-  await page.getByLabel('Full name', { exact: true }).fill('Alex Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('alex+quote@example.test');
-  await page.getByLabel(/Message \(optional\)/).fill('Keep this inquiry\nwith its second line.');
-  await page.getByRole('link', { name: 'Español', exact: true }).click();
-  await expect(page).toHaveURL('/es/contact?utm_source=locale-test#inquiry');
-  await expect(page.getByLabel('Nombre completo', { exact: true })).toHaveValue('Alex Buyer');
-  await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toHaveValue(
+test('locale switch preserves route, query, hash and unsent buyer fields', async ({
+  page,
+  site,
+}) => {
+  const [first, second] = [homeLocale(site), secondLocale(site)];
+  test.skip(!second, 'single-language site');
+  await page.goto(`${contactPath(site, first)}?utm_source=locale-test#inquiry`);
+  await dismissConsent(page, site);
+  await page.getByLabel(form(site, first).fullName, { exact: true }).fill('Alex Buyer');
+  await page.getByLabel(form(site, first).email, { exact: true }).fill('alex+quote@example.test');
+  await page
+    .getByLabel(messageLabel(site, first), { exact: true })
+    .fill('Keep this inquiry\nwith its second line.');
+  await languageLink(page, second!).click();
+  await expect(page).toHaveURL(`${contactPath(site, second!)}?utm_source=locale-test#inquiry`);
+  await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
+    'Alex Buyer',
+  );
+  await expect(page.getByLabel(form(site, second!).email, { exact: true })).toHaveValue(
     'alex+quote@example.test',
   );
-  await expect(page.getByLabel(/Mensaje \(opcional\)/)).toHaveValue(
+  await expect(page.getByLabel(messageLabel(site, second!), { exact: true })).toHaveValue(
     'Keep this inquiry\nwith its second line.',
   );
-  await page.getByRole('link', { name: 'English', exact: true }).click();
-  await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Alex Buyer');
+  await languageLink(page, first).click();
+  await expect(page.getByLabel(form(site, first).fullName, { exact: true })).toHaveValue(
+    'Alex Buyer',
+  );
 });
 
 test('theme and granular consent persist, reopen withdraws and cross-tab changes sync', async ({
   page,
   context,
+  site,
 }) => {
+  const first = homeLocale(site);
+  const other = secondLocale(site) ?? first;
+  const t = site.messages(first);
+  const siblingTitle = site.messages(other).cookie.title;
   await page.goto('/');
-  await page.getByRole('button', { name: 'Customize', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'Analytics', exact: true }).check();
-  await page.getByRole('button', { name: 'Save choices', exact: true }).click();
+  await page.getByRole('button', { name: t.cookie.customize, exact: true }).click();
+  await page.getByRole('checkbox', { name: t.cookie.analytics, exact: true }).check();
+  await page.getByRole('button', { name: t.cookie.saveChoices, exact: true }).click();
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('cookie-consent')!).consent),
   ).toEqual({ necessary: true, analytics: true, advertising: false });
-  await page.getByRole('combobox', { name: 'Theme selector' }).selectOption('dark');
+  const theme = page.getByRole('combobox', { name: t.accessibility.themeSelector });
+  await theme.selectOption('dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.getByRole('region', { name: 'Cookie preferences' })).toBeHidden();
+  await expect(page.getByRole('region', { name: t.cookie.title })).toBeHidden();
   const sibling = await context.newPage();
-  await sibling.goto('/es');
-  await page.getByRole('button', { name: 'Cookie settings' }).click();
-  await expect(page.getByRole('region', { name: 'Cookie preferences' })).toBeVisible();
-  await expect(sibling.getByRole('region', { name: 'Preferencias de cookies' })).toBeVisible();
-  await page.getByRole('button', { name: 'Reject all', exact: true }).click();
-  await expect(sibling.getByRole('region', { name: 'Preferencias de cookies' })).toBeHidden();
+  await sibling.goto(site.pathFor(other, 'home'));
+  await page.getByRole('button', { name: t.cookie.settings }).click();
+  await expect(page.getByRole('region', { name: t.cookie.title })).toBeVisible();
+  await expect(sibling.getByRole('region', { name: siblingTitle })).toBeVisible();
+  await page.getByRole('button', { name: t.cookie.rejectAll, exact: true }).click();
+  await expect(sibling.getByRole('region', { name: siblingTitle })).toBeHidden();
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('cookie-consent')!).consent),
   ).toEqual({ necessary: true, analytics: false, advertising: false });
-  await page.getByRole('combobox', { name: 'Theme selector' }).selectOption('system');
+  await theme.selectOption('system');
   await expect(page.locator('html')).not.toHaveAttribute('data-theme');
   await expect(page.locator('script[src*="googletagmanager"]')).toHaveCount(0);
   await sibling.close();
 });
 
-test('EN and ES browser submissions reach the real Action and require fresh verification', async ({
+test('every language submits to the real Action and requires fresh verification', async ({
   page,
+  site,
 }) => {
-  for (const locale of ['en', 'es']) {
-    await page.goto(locale === 'en' ? '/contact' : '/es/contact');
-    await dismissConsent(page);
+  for (const locale of site.locales) {
+    const f = form(site, locale);
+    const submit = page.getByRole('button', { name: f.submit, exact: true });
+    await page.goto(contactPath(site, locale));
+    await dismissConsent(page, site);
+    await page.getByLabel(f.fullName, { exact: true }).fill('Browser Buyer');
+    await page.getByLabel(f.email, { exact: true }).fill('browser+fixture@example.test');
     await page
-      .getByLabel(locale === 'en' ? 'Full name' : 'Nombre completo', { exact: true })
-      .fill('Browser Buyer');
-    await page
-      .getByLabel(locale === 'en' ? 'Email address' : 'Dirección de correo electrónico', {
-        exact: true,
-      })
-      .fill('browser+fixture@example.test');
-    await page
-      .getByLabel(locale === 'en' ? /Message \(optional\)/ : /Mensaje \(opcional\)/)
+      .getByLabel(messageLabel(site, locale), { exact: true })
       .fill('Actual browser → Astro Action → mocked provider boundaries.');
     const request = page.waitForRequest(
       (request) => request.url().includes('/_actions/inquiry') && request.method() === 'POST',
     );
-    await page
-      .getByRole('button', {
-        name: locale === 'en' ? 'Send inquiry' : 'Enviar consulta',
-        exact: true,
-      })
-      .click();
+    await submit.click();
     expect(JSON.parse((await request).postData()!).fullName).toBe('Browser Buyer');
     await expect(page.locator('[data-form-status]')).toContainText('INQ-');
-    await expect(page.locator('[data-form-status] strong')).toHaveText(
-      locale === 'en' ? 'Done:' : 'Listo:',
-    );
-    await expect(
-      page.getByLabel(locale === 'en' ? 'Full name' : 'Nombre completo', { exact: true }),
-    ).toHaveValue('');
-    await expect(
-      page.getByRole('button', {
-        name: locale === 'en' ? 'Send inquiry' : 'Enviar consulta',
-        exact: true,
-      }),
-    ).toBeDisabled();
+    await expect(page.locator('[data-form-status] strong')).toHaveText(f.statusPrefix.success);
+    await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('');
+    await expect(submit).toBeDisabled();
     await page.getByRole('button', { name: '[Test] Complete verification', exact: true }).click();
-    await expect(
-      page.getByRole('button', {
-        name: locale === 'en' ? 'Send inquiry' : 'Enviar consulta',
-        exact: true,
-      }),
-    ).toBeEnabled();
+    await expect(submit).toBeEnabled();
     await page.evaluate(() =>
       (window as unknown as { __turnstileOptions: Record<string, () => void> }).__turnstileOptions[
         'expired-callback'
       ]!(),
     );
-    await expect(
-      page.getByRole('button', {
-        name: locale === 'en' ? 'Send inquiry' : 'Enviar consulta',
-        exact: true,
-      }),
-    ).toBeDisabled();
-    await expect(page.locator('[data-verification-status]')).toContainText(
-      locale === 'en' ? 'expired' : 'caducado',
-    );
+    await expect(submit).toBeDisabled();
+    await expect(page.locator('[data-verification-status]')).toContainText(f.turnstile.expired);
   }
 });
 
 test('native validation keeps fields; verification load failure is explained without bypass', async ({
   page,
+  site,
 }) => {
-  await page.goto('/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Email address', { exact: true }).fill('not-an-email');
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
-  await expect(page.getByText('Full name is required', { exact: true })).toBeVisible();
-  await expect(page.getByText('Please enter a valid email address', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Email address', { exact: true })).toHaveValue('not-an-email');
+  const f = form(site, homeLocale(site));
+  await page.goto(contactPath(site, homeLocale(site)));
+  await dismissConsent(page, site);
+  await page.getByLabel(f.email, { exact: true }).fill('not-an-email');
+  await page.getByRole('button', { name: f.submit, exact: true }).click();
+  await expect(page.getByText(f.errors.fullName.required, { exact: true })).toBeVisible();
+  await expect(page.getByText(f.errors.email.invalid, { exact: true })).toBeVisible();
+  await expect(page.getByLabel(f.email, { exact: true })).toHaveValue('not-an-email');
   await page.unroute('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit');
   await page.route(
     'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit',
     (route) => route.abort(),
   );
   await page.reload();
-  await expect(page.locator('[data-verification-status]')).toHaveText(
-    'Security check did not load. Reload the page, or email us at the address on this page.',
-  );
-  await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeDisabled();
+  await expect(page.locator('[data-verification-status]')).toHaveText(f.turnstile.loadFailed);
+  await expect(page.getByRole('button', { name: f.submit, exact: true })).toBeDisabled();
 });
 
-test('no-JS content, legal links, and secure fallback remain readable', async ({ browser }) => {
-  const context = await browser.newContext({
-    javaScriptEnabled: false,
-    baseURL: 'http://127.0.0.1:4173',
-  });
+test('no-JS content, legal links, and secure fallback remain readable', async ({
+  browser,
+  baseURL,
+  site,
+}) => {
+  const locale = secondLocale(site) ?? homeLocale(site);
+  const f = form(site, locale);
+  const context = await browser.newContext({ javaScriptEnabled: false, baseURL });
   const page = await context.newPage();
-  await page.goto('/es/contact');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Contacto');
+  await page.goto(contactPath(site, locale));
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    site.pageContent(locale, 'contact').metadata.title,
+  );
   // Playwright's text engine deliberately skips noscript descendants even when
   // scripting is disabled; assert the actual rendered fallback element instead.
-  await expect(page.locator('noscript .fallback')).toHaveText(
-    'El formulario seguro necesita JavaScript porque la verificación contra bots no puede ejecutarse sin él.',
-  );
+  await expect(page.locator('noscript .fallback')).toHaveText(f.noJsExplanation);
   await expect(page.locator('noscript .fallback')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Enviar consulta/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: f.submit })).toBeDisabled();
   // Nothing claims the check is broken, and the no-JS notice comes before the fields.
   await expect(page.locator('[data-verification-status]')).toHaveText('');
   expect(
     await page
       .locator('noscript:has(.fallback)')
+      .first()
       .evaluate((notice) =>
         Boolean(
           notice.compareDocumentPosition(document.querySelector('form[data-inquiry-form]')!) &
@@ -264,58 +360,68 @@ test('no-JS content, legal links, and secure fallback remain readable', async ({
       ),
   ).toBe(true);
   // Script-only footer controls are not offered when they cannot work.
-  await expect(page.getByRole('button', { name: 'Configuración de cookies' })).toBeHidden();
+  await expect(
+    page.getByRole('button', { name: site.messages(locale).cookie.settings }),
+  ).toBeHidden();
   await expect(page.locator('[data-theme-select]')).toBeHidden();
-  await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Política de privacidad', exact: true }).first().click();
+  // Without the form, a configured mailbox is the way to reach the business.
+  const email = site.site.contact.email;
+  if (email)
+    await expect(
+      page.getByRole('region', { name: f.contactAriaLabel }).getByRole('link', { name: email }),
+    ).toHaveAttribute('href', `mailto:${email}`);
+  else await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+  await page
+    .getByRole('link', { name: site.messages(locale).footer.sections.support.privacy, exact: true })
+    .first()
+    .click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Privacidad — pendiente de completar',
+    site.pageContent(locale, 'privacy').metadata.title,
   );
   await context.close();
 });
 
-test('mobile layout is keyboard usable and has no horizontal overflow', async ({ page }) => {
+test('contact pages reflow on phones without horizontal scrolling', async ({ page, site }) => {
   // 320px is the WCAG 1.4.10 reflow width; the fixture widget is as wide as real Turnstile.
-  for (const path of ['/contact', '/es/contact']) {
+  for (const locale of site.locales) {
     await page.setViewportSize({ width: 320, height: 640 });
-    await page.goto(path);
-    await dismissConsent(page);
+    await page.goto(contactPath(site, locale));
+    await dismissConsent(page, site);
     await expect(page.getByRole('button', { name: '[Test] Complete verification' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
   }
+  const t = site.messages(homeLocale(site));
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto('/contact');
-  await dismissConsent(page);
+  await page.goto(contactPath(site, homeLocale(site)));
+  await dismissConsent(page, site);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.keyboard.press('Tab');
-  await expect(page.locator(':focus')).toHaveCount(1);
-  await expect(page.getByLabel('Full name', { exact: true })).toBeVisible();
+  const { privacy, terms } = t.footer.sections.support;
   await expect(page.locator('.privacy-notice')).toHaveText(
-    'By submitting this form, you agree to our Privacy Policy and Terms of Service.',
+    t.inquiry.form.privacyNotice.replace('{privacy}', privacy).replace('{terms}', terms),
   );
-  await expect(page.locator('.privacy-notice a')).toHaveText([
-    'Privacy Policy',
-    'Terms of Service',
-  ]);
+  const legalLinks = { '{privacy}': privacy, '{terms}': terms };
+  await expect(page.locator('.privacy-notice a')).toHaveText(
+    t.inquiry.form.privacyNotice
+      .match(/\{privacy\}|\{terms\}/g)!
+      .map((placeholder) => legalLinks[placeholder as keyof typeof legalLinks]),
+  );
   // In-site links and buttons carry no external-link arrow; only new-tab social links do.
-  await expect(page.locator('[data-submit]')).toHaveText('Send inquiry');
-  await page.screenshot({ path: 'test-results/contact-mobile.png', fullPage: true });
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/');
-  await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });
+  await expect(page.locator('[data-submit]')).toHaveText(t.inquiry.form.submit);
 });
 
 test('a long company email fits phone widths, keeps the compact widget and keeps form-first Tab order', async ({
   page,
+  site,
 }) => {
-  await withLongCompanyEmail(page);
+  await withLongCompanyEmail(page, site);
   for (const width of [320, 375]) {
-    for (const path of ['/contact', '/es/contact']) {
+    for (const locale of site.locales) {
+      const path = contactPath(site, locale);
       await page.setViewportSize({ width, height: 812 });
       await page.goto(path);
-      await dismissConsent(page);
+      await dismissConsent(page, site);
       await expect(page.locator('.contact-methods a')).toHaveText(longEmail);
       await expect(page.locator('[data-turnstile] button')).toHaveCount(1);
       expect(
@@ -330,10 +436,11 @@ test('a long company email fits phone widths, keeps the compact widget and keeps
     }
   }
   // Phone: the form is shown first, so keyboard focus must reach it before the contact links.
+  const f = form(site, homeLocale(site));
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto('/contact');
-  await dismissConsent(page);
-  const fullName = page.getByLabel('Full name', { exact: true });
+  await page.goto(contactPath(site, homeLocale(site)));
+  await dismissConsent(page, site);
+  const fullName = page.getByLabel(f.fullName, { exact: true });
   const asideEmail = page.locator('.contact-methods a');
   expect((await fullName.boundingBox())!.y).toBeLessThan((await asideEmail.boundingBox())!.y);
   const order: string[] = [];
@@ -350,25 +457,33 @@ test('a long company email fits phone widths, keeps the compact widget and keeps
 
 test('header marks the current page and language alike; links and buttons react to hover in both themes', async ({
   page,
+  site,
 }) => {
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
   const decoration = (selector: string) =>
     page.locator(selector).evaluate((element) => {
       const style = getComputedStyle(element);
       return `${style.textDecorationLine} ${style.textDecorationThickness}`;
     });
-  await page.goto('/');
-  await dismissConsent(page);
+  await page.goto(site.pathFor(locale, 'home'));
+  await dismissConsent(page, site);
   // Current items: foreground colour and a 2px underline; the others stay plain until hover.
-  for (const selector of ['.main-nav a[href="/"]', '.language-nav a[lang="en"]'])
-    expect(await decoration(selector)).toBe('underline 2px');
   for (const selector of [
-    '.main-nav a[href="/contact"]',
-    '.language-nav a[lang="es"]',
+    `.main-nav a[href="${site.pathFor(locale, 'home')}"]`,
+    `.language-nav a[lang="${locale}"]`,
+  ])
+    expect(await decoration(selector), selector).toBe('underline 2px');
+  for (const selector of [
+    `.main-nav a[href="${contactPath(site, locale)}"]`,
+    ...site.locales
+      .filter((language) => language !== locale)
+      .map((language) => `.language-nav a[lang="${language}"]`),
     'a.brand',
   ]) {
-    expect(await decoration(selector)).toMatch(/^none /);
+    expect(await decoration(selector), selector).toMatch(/^none /);
     await page.locator(selector).hover();
-    expect(await decoration(selector)).toMatch(/^underline /);
+    expect(await decoration(selector), selector).toMatch(/^underline /);
   }
   await expect(page.locator('.main-nav')).not.toContainText('↗');
 
@@ -390,10 +505,11 @@ test('header marks the current page and language alike; links and buttons react 
       );
       return { background: style.backgroundColor, ratio: (light! + 0.05) / (dark! + 0.05) };
     });
-  await page.goto('/missing-offering');
+  const home = site.pathFor(locale, 'home');
+  await page.goto(`${home === '/' ? '' : home}/missing-offering`);
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('combobox', { name: 'Theme selector' }).selectOption(theme);
-    for (const name of ['Back to homepage', 'Contact']) {
+    await page.getByRole('combobox', { name: t.accessibility.themeSelector }).selectOption(theme);
+    for (const name of [t.errors.notFound.goHome, t.footer.sections.navigation.contact]) {
       const button = page.locator('main').getByRole('link', { name, exact: true });
       await page.mouse.move(0, 0);
       const resting = await button.evaluate((element) => getComputedStyle(element).backgroundColor);
@@ -405,43 +521,55 @@ test('header marks the current page and language alike; links and buttons react 
   }
 });
 
-test('contact aside has its own line instead of repeating the message hint', async ({ page }) => {
-  for (const [path, hint] of [
-    ['/contact', 'Share your requirement'],
-    ['/es/contact', 'Comparte tus requisitos'],
-  ] as const) {
-    await page.goto(path);
+test('contact aside has its own line instead of repeating the message hint', async ({
+  page,
+  site,
+}) => {
+  const { contact } = site.site;
+  const methods = Boolean(contact.email || contact.phone || contact.whatsapp);
+  for (const locale of site.locales) {
+    const hint = form(site, locale).messageHint;
+    await page.goto(contactPath(site, locale));
     await expect(page.locator('#message-hint')).toContainText(hint);
-    await expect(page.locator('.contact-aside')).not.toContainText(hint);
+    const aside = page.locator('.contact-aside');
+    await expect(aside).not.toContainText(hint);
+    // The intro leads into configured contact methods and is absent without them.
+    const intro = aside.getByText(site.messages(locale).contact.panel.intro, { exact: true });
+    await expect(intro).toHaveCount(methods ? 1 : 0);
   }
 });
 
-test('long words in headings wrap at 320px instead of widening the page', async ({ page }) => {
+test('long words in headings wrap at 320px instead of widening the page', async ({
+  page,
+  site,
+}) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  for (const [path, level] of [
-    ['/es', 1],
-    ['/es/contact', 2],
-  ] as const) {
-    await page.goto(path);
-    await dismissConsent(page);
-    await page
-      .getByRole('heading', { level })
-      .first()
-      .evaluate((heading) => (heading.textContent = 'Telecomunicaciones industriales'));
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-      path,
-    ).toBe(true);
+  for (const locale of site.locales) {
+    for (const [key, level] of [
+      ['home', 1],
+      ['contact', 2],
+    ] as const) {
+      const path = site.pathFor(locale, key);
+      await page.goto(path);
+      await dismissConsent(page, site);
+      await page
+        .getByRole('heading', { level })
+        .first()
+        .evaluate((heading) => (heading.textContent = 'Telecomunicaciones industriales'));
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        path,
+      ).toBe(true);
+    }
   }
 });
 
 test('security check reads as loading, then stays quiet while the challenge waits', async ({
   page,
+  site,
 }) => {
-  for (const [path, loading, unavailable] of [
-    ['/contact', 'Loading security check', 'temporarily unavailable'],
-    ['/es/contact', 'Cargando la verificación de seguridad', 'no está disponible'],
-  ]) {
+  for (const locale of site.locales) {
+    const { turnstile } = form(site, locale);
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
     await page.unroute('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit');
@@ -457,9 +585,9 @@ test('security check reads as loading, then stays quiet while the challenge wait
       },
     );
     // The held widget script delays the load event; the page is usable once parsed.
-    await page.goto(path!, { waitUntil: 'domcontentloaded' });
+    await page.goto(contactPath(site, locale), { waitUntil: 'domcontentloaded' });
     const status = page.locator('[data-verification-status]');
-    await expect(status).toContainText(loading!);
+    await expect(status).toContainText(turnstile.loading);
     release();
     await expect.poll(() => page.evaluate(() => '__turnstileOptions' in window)).toBe(true);
     await expect(status).toHaveText('');
@@ -469,21 +597,24 @@ test('security check reads as loading, then stays quiet while the challenge wait
         'error-callback'
       ]!(),
     );
-    await expect(status).toContainText(unavailable!);
+    await expect(status).toContainText(turnstile.unavailable);
   }
 });
 
 test('on a phone, every Tab stop up to the footer stays clear of the open cookie card', async ({
   page,
+  site,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const [path, title] of [
-    ['/contact', 'Cookie preferences'],
-    ['/es/contact', 'Preferencias de cookies'],
-    ['/privacy', 'Cookie preferences'],
+  const first = homeLocale(site);
+  for (const [locale, key] of [
+    [first, 'contact'],
+    ...site.locales.slice(1).map((locale) => [locale, 'contact'] as const),
+    [first, 'privacy'],
   ] as const) {
+    const path = site.pathFor(locale, key);
     await page.goto(path);
-    const banner = page.getByRole('region', { name: title });
+    const banner = page.getByRole('region', { name: site.messages(locale).cookie.title });
     await expect(banner).toBeVisible();
     // A person sees a rendered frame before pressing Tab; headless navigation may not have one yet.
     await page.evaluate(
@@ -523,24 +654,24 @@ test('on a phone, every Tab stop up to the footer stays clear of the open cookie
 
 test('the cookie card stays on screen at 400% zoom and in landscape, scrolling inside itself', async ({
   page,
+  site,
 }) => {
   for (const [width, height] of [
     [320, 256],
     [568, 320],
-  ]) {
+  ] as const) {
     await page.setViewportSize({ width, height });
-    for (const [path, customize, privacy] of [
-      ['/contact', 'Customize', 'Privacy policy'],
-      ['/es/contact', 'Personalizar', 'Política de privacidad'],
-    ] as const) {
+    for (const locale of site.locales) {
+      const path = contactPath(site, locale);
+      const { cookie } = site.messages(locale);
       await page.goto(path);
       const banner = page.locator('[data-cookie-banner]');
-      await banner.getByRole('button', { name: customize, exact: true }).click();
+      await banner.getByRole('button', { name: cookie.customize, exact: true }).click();
       const box = (await banner.boundingBox())!;
       expect(box.y, `${path} at ${width}x${height} card top`).toBeGreaterThanOrEqual(0);
       expect(box.y + box.height).toBeLessThanOrEqual(height);
       // The privacy link a visitor is consenting under can be reached and seen.
-      const link = banner.getByRole('link', { name: privacy, exact: true });
+      const link = banner.getByRole('link', { name: cookie.learnMore, exact: true });
       await link.focus();
       const linkBox = (await link.boundingBox())!;
       expect(linkBox.y, `${path} at ${width}x${height} link`).toBeGreaterThanOrEqual(0);
@@ -551,13 +682,12 @@ test('the cookie card stays on screen at 400% zoom and in landscape, scrolling i
 
 test('Customize comes last and Tab moves straight into the options it reveals', async ({
   page,
+  site,
 }) => {
-  for (const [path, customize, labels] of [
-    ['/', 'Customize', ['Analytics', 'Advertising', 'Save choices']],
-    ['/es', 'Personalizar', ['Análisis', 'Publicidad', 'Guardar elecciones']],
-  ] as const) {
-    await page.goto(path);
-    const button = page.getByRole('button', { name: customize, exact: true });
+  for (const locale of site.locales) {
+    const { cookie } = site.messages(locale);
+    await page.goto(site.pathFor(locale, 'home'));
+    const button = page.getByRole('button', { name: cookie.customize, exact: true });
     const collapsed = await button.evaluate((element) => getComputedStyle(element).backgroundColor);
     await button.focus();
     await page.keyboard.press('Enter');
@@ -566,7 +696,7 @@ test('Customize comes last and Tab moves straight into the options it reveals', 
     expect(await button.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
       collapsed,
     );
-    for (const label of labels) {
+    for (const label of [cookie.analytics, cookie.advertising, cookie.saveChoices]) {
       await page.keyboard.press('Tab');
       expect(
         await page.evaluate(
@@ -579,26 +709,19 @@ test('Customize comes last and Tab moves straight into the options it reveals', 
 
 test('choosing after reopening cookie settings hands focus back to the footer control', async ({
   page,
+  site,
 }) => {
-  for (const [path, settings, reject, customize, save] of [
-    ['/privacy', 'Cookie settings', 'Reject all', 'Customize', 'Save choices'],
-    [
-      '/es/privacy',
-      'Configuración de cookies',
-      'Rechazar todo',
-      'Personalizar',
-      'Guardar elecciones',
-    ],
-  ] as const) {
-    await page.goto(path);
-    await dismissConsent(page);
-    const trigger = page.getByRole('button', { name: settings, exact: true });
+  for (const locale of site.locales) {
+    const { cookie } = site.messages(locale);
+    await page.goto(site.pathFor(locale, 'privacy'));
+    await dismissConsent(page, site);
+    const trigger = page.getByRole('button', { name: cookie.settings, exact: true });
     // Once with a quick choice, once through the expanded options.
-    for (const finalChoice of [reject, save]) {
+    for (const finalChoice of [cookie.rejectAll, cookie.saveChoices]) {
       await trigger.focus();
       await page.keyboard.press('Enter');
-      await expect(page.getByRole('button', { name: customize, exact: true })).toBeFocused();
-      if (finalChoice === save) {
+      await expect(page.getByRole('button', { name: cookie.customize, exact: true })).toBeFocused();
+      if (finalChoice === cookie.saveChoices) {
         await page.keyboard.press('Enter');
         for (let step = 0; step < 3; step++) await page.keyboard.press('Tab');
       } else {
@@ -614,82 +737,103 @@ test('choosing after reopening cookie settings hands focus back to the footer co
 
 test('a pointer click that leaves focus on the page still hands focus back after a keyboard choice', async ({
   page,
+  site,
 }) => {
-  await page.goto('/privacy');
-  await dismissConsent(page);
-  const trigger = page.getByRole('button', { name: 'Cookie settings', exact: true });
+  const locale = homeLocale(site);
+  const { cookie } = site.messages(locale);
+  await page.goto(site.pathFor(locale, 'privacy'));
+  await dismissConsent(page, site);
+  const trigger = page.getByRole('button', { name: cookie.settings, exact: true });
   // Safari does not focus a clicked button, so the click arrives while focus is still on body.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await trigger.dispatchEvent('click');
-  await expect(page.getByRole('button', { name: 'Customize', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: cookie.customize, exact: true })).toBeFocused();
   for (let step = 0; step < 2; step++) await page.keyboard.press('Shift+Tab');
-  await expect(page.getByRole('button', { name: 'Reject all', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: cookie.rejectAll, exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-cookie-banner]')).toBeHidden();
   await expect(trigger).toBeFocused();
 });
 
-test('language links have 24px phone targets and spoken language names', async ({ page }) => {
+test('language links have 24px phone targets and spoken language names', async ({ page, site }) => {
   for (const width of [320, 375]) {
     await page.setViewportSize({ width, height: 812 });
-    await page.goto('/es/contact');
-    for (const [name, text] of [
-      ['English', 'EN'],
-      ['Español', 'ES'],
-    ]) {
-      const link = page.getByRole('link', { name, exact: true });
-      await expect(link).toHaveText(text);
+    await page.goto(contactPath(site, secondLocale(site) ?? homeLocale(site)));
+    for (const locale of site.locales) {
+      const link = languageLink(page, locale);
+      await expect(link).toHaveText(locale.toUpperCase());
       const box = (await link.boundingBox())!;
-      expect(box.width, `${name} at ${width}px`).toBeGreaterThanOrEqual(24);
-      expect(box.height, `${name} at ${width}px`).toBeGreaterThanOrEqual(24);
+      expect(box.width, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
+      expect(box.height, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
     }
   }
 });
 
-test('the theme select shows the current theme and the template mark appears without a logo', async ({
+test('the theme select shows the current theme and the header brand follows the logo configuration', async ({
   page,
+  site,
 }) => {
-  await page.goto('/');
-  await dismissConsent(page);
-  const select = page.getByRole('combobox', { name: 'Theme selector' });
-  await expect(select.locator('option')).toHaveText(['System', 'Light', 'Dark']);
-  await select.selectOption('dark');
-  await expect(select.locator('option:checked')).toHaveText('Dark');
-  await page.goto('/es');
-  const selectEs = page.getByRole('combobox', { name: 'Selector de tema' });
-  await expect(selectEs.locator('option')).toHaveText(['Sistema', 'Claro', 'Oscuro']);
-  await expect(selectEs.locator('option:checked')).toHaveText('Oscuro');
-  // The template ships without a logo, so its own mark stands in next to the site name.
-  await expect(page.locator('.brand .brand-mark')).toBeVisible();
-  await expect(page.locator('.site-header .brand img')).toHaveCount(0);
-});
-
-test('legal pages show the last-updated date in the page language', async ({ page }) => {
-  for (const [path, pattern] of [
-    ['/privacy', /^[A-Z][a-z]+ \d{1,2}, \d{4}$/],
-    ['/terms', /^[A-Z][a-z]+ \d{1,2}, \d{4}$/],
-    ['/es/privacy', /^\d{1,2} de [a-z]+ de \d{4}$/],
-    ['/es/terms', /^\d{1,2} de [a-z]+ de \d{4}$/],
-  ] as const) {
-    await page.goto(path);
-    const time = page.locator('.legal-note time');
-    await expect(time).toHaveText(pattern);
-    await expect(time).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}$/);
+  for (const [index, locale] of site.locales.entries()) {
+    const t = site.messages(locale);
+    await page.goto(site.pathFor(locale, 'home'));
+    await dismissConsent(page, site);
+    const select = page.getByRole('combobox', { name: t.accessibility.themeSelector });
+    await expect(select.locator('option')).toHaveText([
+      t.theme.system,
+      t.theme.light,
+      t.theme.dark,
+    ]);
+    // The first language picks the theme; later ones show the choice it persisted.
+    if (index === 0) await select.selectOption('dark');
+    await expect(select.locator('option:checked')).toHaveText(t.theme.dark);
+  }
+  const brand = page.locator('.site-header .brand');
+  if (site.site.brandAssets.logo?.status === 'ready') {
+    // A configured logo replaces the template mark rather than sitting beside it.
+    await expect(brand.locator('img')).toBeVisible();
+    await expect(brand.locator('.brand-mark')).toHaveCount(0);
+  } else {
+    // Without a logo the template's own mark stands in next to the site name.
+    await expect(brand.locator('.brand-mark')).toBeVisible();
+    await expect(brand.locator('img')).toHaveCount(0);
+    await expect(brand).toHaveText(site.site.name);
   }
 });
 
-test('keyboard and assistive tech never reach the honeypot field', async ({ page }) => {
-  await page.goto('/contact');
-  await dismissConsent(page);
-  const form = page.locator('form[data-inquiry-form]');
-  await expect(form.getByRole('textbox', { name: 'Website' })).toHaveCount(0);
+test('legal pages show the last-updated date in the page language', async ({ page, site }) => {
+  // Long dates as each language writes them, independent of the formatter the page uses.
+  const longDate: Record<string, RegExp> = {
+    en: /^[A-Z][a-z]+ \d{1,2}, \d{4}$/,
+    es: /^\d{1,2} de [a-z]+ de \d{4}$/,
+  };
+  for (const locale of site.locales)
+    for (const key of ['privacy', 'terms'] as const) {
+      await page.goto(site.pathFor(locale, key));
+      const time = page.locator('.legal-note time');
+      if (longDate[locale]) await expect(time).toHaveText(longDate[locale]);
+      await expect(time).toHaveAttribute(
+        'datetime',
+        site.pageContent(locale, key).metadata.updatedAt,
+      );
+    }
+});
+
+test('keyboard and assistive tech never reach the honeypot field', async ({ page, site }) => {
+  const locale = homeLocale(site);
+  const f = form(site, locale);
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  const inquiry = page.locator('form[data-inquiry-form]');
+  await expect(inquiry.getByRole('textbox', { name: f.website })).toHaveCount(0);
   const honeypot = page.locator('#website');
   await expect(honeypot).toHaveAttribute('tabindex', '-1');
   await expect(honeypot).toHaveAttribute('autocomplete', 'off');
   await expect(honeypot.locator('..')).toHaveAttribute('aria-hidden', 'true');
 
-  await page.getByLabel('Full name', { exact: true }).focus();
-  const privacy = form.getByRole('link', { name: 'Privacy Policy' });
+  await page.getByLabel(f.fullName, { exact: true }).focus();
+  const privacy = inquiry.getByRole('link', {
+    name: site.messages(locale).footer.sections.support.privacy,
+  });
   const visited: string[] = [];
   for (let presses = 0; presses < 12; presses++) {
     await page.keyboard.press('Tab');
@@ -705,18 +849,28 @@ test('keyboard and assistive tech never reach the honeypot field', async ({ page
   await expect(privacy).toBeFocused();
 });
 
-test('session draft survives refresh and a legal-page round trip', async ({ page }) => {
-  await page.goto('/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Full name', { exact: true }).fill('Persistent Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('draft@example.test');
-  await page.getByLabel(/Message \(optional\)/).fill('Retain this unsent draft.');
+test('session draft survives refresh and a legal-page round trip', async ({ page, site }) => {
+  const locale = homeLocale(site);
+  const f = form(site, locale);
+  const t = site.messages(locale);
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  await page.getByLabel(f.fullName, { exact: true }).fill('Persistent Buyer');
+  await page.getByLabel(f.email, { exact: true }).fill('draft@example.test');
+  await page
+    .getByLabel(messageLabel(site, locale), { exact: true })
+    .fill('Retain this unsent draft.');
   await page.reload();
-  await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Persistent Buyer');
-  await page.getByRole('link', { name: 'Privacy Policy', exact: true }).first().click();
-  await page.getByRole('link', { name: 'Start an inquiry' }).click();
-  await expect(page.getByLabel('Email address', { exact: true })).toHaveValue('draft@example.test');
-  await expect(page.getByLabel(/Message \(optional\)/)).toHaveValue('Retain this unsent draft.');
+  await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('Persistent Buyer');
+  await page
+    .getByRole('link', { name: t.footer.sections.support.privacy, exact: true })
+    .first()
+    .click();
+  await page.getByRole('link', { name: t.navigation.contactSales, exact: true }).click();
+  await expect(page.getByLabel(f.email, { exact: true })).toHaveValue('draft@example.test');
+  await expect(page.getByLabel(messageLabel(site, locale), { exact: true })).toHaveValue(
+    'Retain this unsent draft.',
+  );
   expect(
     await page.evaluate(() =>
       Object.keys(JSON.parse(sessionStorage.getItem('inquiry-draft')!)).sort(),
@@ -729,139 +883,154 @@ test('session draft survives refresh and a legal-page round trip', async ({ page
   ] as const) {
     await expect(page.locator(`[name="${name}"]`)).toHaveAttribute('maxlength', String(limit));
   }
+  const second = secondLocale(site);
+  if (!second) return;
   const longestMessage = 'M'.repeat(2000);
-  await page.getByLabel(/Message \(optional\)/).fill(longestMessage);
+  await page.getByLabel(messageLabel(site, locale), { exact: true }).fill(longestMessage);
   await page.reload();
-  await page.getByRole('link', { name: 'Español', exact: true }).click();
-  await expect(page.getByLabel(/Mensaje \(opcional\)/)).toHaveValue(longestMessage);
+  await languageLink(page, second).click();
+  await expect(page.getByLabel(messageLabel(site, second), { exact: true })).toHaveValue(
+    longestMessage,
+  );
 });
 
 test('pending submission locks buyer edits and duplicate Enter, then clears only confirmed data', async ({
   page,
   request,
+  controlURL,
+  site,
 }) => {
-  await request.post('http://127.0.0.1:4174', { data: { delay: 1500 } });
-  await page.goto('/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Full name', { exact: true }).fill('One Pending Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('pending@example.test');
+  const locale = homeLocale(site);
+  const f = form(site, locale);
+  await request.post(controlURL, { data: { delay: 1500 } });
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  await page.getByLabel(f.fullName, { exact: true }).fill('One Pending Buyer');
+  await page.getByLabel(f.email, { exact: true }).fill('pending@example.test');
   const submissions: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/_actions/inquiry')) submissions.push(request.url());
   });
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sending…', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: f.submit, exact: true }).click();
+  await expect(page.getByRole('button', { name: f.submitting, exact: true })).toBeDisabled();
   // Screen readers hear the wait, and focus is kept on the announcement instead of the page body.
-  await expect(page.locator('[data-form-status]')).toHaveText('Sending…');
+  await expect(page.locator('[data-form-status]')).toHaveText(f.submitting);
   await expect(page.locator('[data-form-status]')).toBeFocused();
-  await expect(page.getByLabel('Full name', { exact: true })).toBeDisabled();
-  await expect(page.getByLabel('Email address', { exact: true })).toBeDisabled();
-  await expect(page.getByLabel(/Message \(optional\)/)).toBeDisabled();
+  await expect(page.getByLabel(f.fullName, { exact: true })).toBeDisabled();
+  await expect(page.getByLabel(f.email, { exact: true })).toBeDisabled();
+  await expect(page.getByLabel(messageLabel(site, locale), { exact: true })).toBeDisabled();
   await page.locator('[data-inquiry-form]').evaluate((form) => {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
-  await page.getByRole('link', { name: 'Español', exact: true }).click();
-  await expect(page).toHaveURL('/contact');
-  await expect(page.locator('[data-form-status]')).toContainText('Wait for the inquiry result');
+  const second = secondLocale(site);
+  if (second) {
+    await languageLink(page, second).click();
+    await expect(page).toHaveURL(contactPath(site, locale));
+    await expect(page.locator('[data-form-status]')).toContainText(f.localePending);
+  }
   await expect(page.locator('[data-form-status]')).toContainText('INQ-');
   expect(submissions).toHaveLength(1);
-  const { calls } = await (await request.get('http://127.0.0.1:4174')).json();
+  const { calls } = await (await request.get(controlURL)).json();
   expect(calls.filter((call: { url: string }) => call.url.includes('api.resend.com'))).toHaveLength(
     1,
   );
   expect(
     calls.filter((call: { url: string }) => call.url.includes('api.airtable.com')),
   ).toHaveLength(1);
-  await expect(page.getByLabel('Full name', { exact: true })).toBeEnabled();
-  await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel(f.fullName, { exact: true })).toBeEnabled();
+  await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('');
   expect(await page.evaluate(() => sessionStorage.getItem('inquiry-draft'))).toBeNull();
 });
 
 test('unconfirmed delivery keeps draft and retries only after explicit buyer action with fresh token', async ({
   page,
   request,
+  controlURL,
+  site,
 }) => {
-  await request.post('http://127.0.0.1:4174', { data: { email: 'reject', airtable: 'reject' } });
-  await page.goto('/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Full name', { exact: true }).fill('Retry Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('retry@example.test');
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
-  await expect(page.locator('[data-form-status]')).toContainText('may have been received');
-  await expect(page.locator('[data-form-status]')).toContainText(
-    'email us at the address on this page',
-  );
-  await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Retry Buyer');
-  await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeDisabled();
+  const locale = homeLocale(site);
+  const f = form(site, locale);
+  const submit = page.getByRole('button', { name: f.submit, exact: true });
+  await request.post(controlURL, { data: { email: 'reject', airtable: 'reject' } });
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  await page.getByLabel(f.fullName, { exact: true }).fill('Retry Buyer');
+  await page.getByLabel(f.email, { exact: true }).fill('retry@example.test');
+  await submit.click();
+  await expect(page.locator('[data-form-status]')).toContainText(f.unknown);
+  await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('Retry Buyer');
+  await expect(submit).toBeDisabled();
   expect(
     await page.evaluate(() => JSON.parse(sessionStorage.getItem('inquiry-draft')!).fullName),
   ).toBe('Retry Buyer');
-  await request.post('http://127.0.0.1:4174', { data: { email: 'accept', airtable: 'reject' } });
+  await request.post(controlURL, { data: { email: 'accept', airtable: 'reject' } });
   await page.getByRole('button', { name: '[Test] Complete verification', exact: true }).click();
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
+  await submit.click();
   await expect(page.locator('[data-form-status]')).toContainText('INQ-');
-  await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('');
 });
 
 test('server canonical validation maps an email rejection to localized field and focus', async ({
   page,
+  site,
 }) => {
-  await page.goto('/es/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Nombre completo', { exact: true }).fill('Valid Buyer');
-  await page
-    .getByLabel('Dirección de correo electrónico', { exact: true })
-    .fill('+buyer@example.test');
-  await page.getByRole('button', { name: 'Enviar consulta', exact: true }).click();
-  await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toHaveAttribute(
-    'aria-invalid',
-    'true',
-  );
-  await expect(
-    page.getByText('Introduce una dirección de correo válida', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toBeFocused();
-  await expect(page.locator('[data-form-status] strong')).toHaveText('Error:');
-  await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toHaveValue(
-    '+buyer@example.test',
-  );
+  const locale = secondLocale(site) ?? homeLocale(site);
+  const f = form(site, locale);
+  const email = page.getByLabel(f.email, { exact: true });
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  await page.getByLabel(f.fullName, { exact: true }).fill('Valid Buyer');
+  await email.fill('+buyer@example.test');
+  await page.getByRole('button', { name: f.submit, exact: true }).click();
+  await expect(email).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText(f.errors.email.invalid, { exact: true })).toBeVisible();
+  await expect(email).toBeFocused();
+  await expect(page.locator('[data-form-status] strong')).toHaveText(f.statusPrefix.error);
+  await expect(email).toHaveValue('+buyer@example.test');
 });
 
 test('rate-limit cooldown blocks repeat submit until elapsed and still needs fresh token', async ({
   page,
   request,
+  controlURL,
+  site,
 }) => {
+  const locale = homeLocale(site);
+  const f = form(site, locale);
+  const submit = page.getByRole('button', { name: f.submit, exact: true });
   await page.clock.install();
-  await request.post('http://127.0.0.1:4174', { data: { rateCount: 11, rateTtl: 60000 } });
-  await page.goto('/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Full name', { exact: true }).fill('Rate Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('rate@example.test');
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
-  await expect(page.locator('[data-form-status]')).toContainText(
-    'Too many attempts. Wait about a minute',
-  );
+  await request.post(controlURL, { data: { rateCount: 11, rateTtl: 60000 } });
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  await page.getByLabel(f.fullName, { exact: true }).fill('Rate Buyer');
+  await page.getByLabel(f.email, { exact: true }).fill('rate@example.test');
+  await submit.click();
+  await expect(page.locator('[data-form-status]')).toContainText(f.errors.rateLimitSummary);
   await page.getByRole('button', { name: '[Test] Complete verification', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeDisabled();
+  await expect(submit).toBeDisabled();
   await page.locator('[data-inquiry-form]').dispatchEvent('submit');
-  let state = await (await request.get('http://127.0.0.1:4174')).json();
+  const state = await (await request.get(controlURL)).json();
   expect(state.calls).toHaveLength(1);
   await page.clock.fastForward(60001);
-  await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeEnabled();
-  await request.post('http://127.0.0.1:4174', { data: { rateCount: 1 } });
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
+  await expect(submit).toBeEnabled();
+  await request.post(controlURL, { data: { rateCount: 1 } });
+  await submit.click();
   await expect(page.locator('[data-form-status]')).toContainText('INQ-');
 });
 
 test('losing the real Action response after provider acceptance retains data and does not retry', async ({
   page,
   request,
+  controlURL,
+  site,
 }) => {
-  await page.goto('/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Full name', { exact: true }).fill('Response Lost Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('lost@example.test');
+  const locale = homeLocale(site);
+  const f = form(site, locale);
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  await page.getByLabel(f.fullName, { exact: true }).fill('Response Lost Buyer');
+  await page.getByLabel(f.email, { exact: true }).fill('lost@example.test');
   let responsesDropped = 0;
   await page.route('**/_actions/inquiry', async (route) => {
     // Execute the actual Action fully, then simulate network loss. Do not forge
@@ -871,11 +1040,11 @@ test('losing the real Action response after provider acceptance retains data and
     responsesDropped++;
     await route.abort('connectionfailed');
   });
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
-  await expect(page.locator('[data-form-status]')).toContainText('may have been received');
-  await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Response Lost Buyer');
-  await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeDisabled();
-  const { calls } = await (await request.get('http://127.0.0.1:4174')).json();
+  await page.getByRole('button', { name: f.submit, exact: true }).click();
+  await expect(page.locator('[data-form-status]')).toContainText(f.unknown);
+  await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('Response Lost Buyer');
+  await expect(page.getByRole('button', { name: f.submit, exact: true })).toBeDisabled();
+  const { calls } = await (await request.get(controlURL)).json();
   expect(
     calls.filter((call: { url: string }) => /api\.(resend|airtable)\.com/.test(call.url)),
   ).toHaveLength(2);
@@ -884,7 +1053,9 @@ test('losing the real Action response after provider acceptance retains data and
 
 test('configured analytics uses real consent code: no optional tag before consent, clean URL, withdrawal', async ({
   page,
+  site,
 }) => {
+  const t = site.messages(homeLocale(site));
   // Only public page configuration is varied as a fixture; unchanged built
   // consent code runs. No production readiness bypass is added to the app.
   await page.route('**/?*', async (route) => {
@@ -905,9 +1076,9 @@ test('configured analytics uses real consent code: no optional tag before consen
   });
   await page.goto('/?private=not-for-analytics#hidden');
   expect(optionalLoads).toHaveLength(0);
-  await page.getByRole('button', { name: 'Customize', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'Analytics', exact: true }).check();
-  await page.getByRole('button', { name: 'Save choices', exact: true }).click();
+  await page.getByRole('button', { name: t.cookie.customize, exact: true }).click();
+  await page.getByRole('checkbox', { name: t.cookie.analytics, exact: true }).check();
+  await page.getByRole('button', { name: t.cookie.saveChoices, exact: true }).click();
   await expect.poll(() => optionalLoads.length).toBe(1);
   const signals = await page.evaluate(() =>
     (window as unknown as { dataLayer: Array<IArguments> }).dataLayer.map((args) =>
@@ -939,7 +1110,7 @@ test('configured analytics uses real consent code: no optional tag before consen
   await page.evaluate(() => {
     document.cookie = '_ga=fixture; path=/';
   });
-  await page.getByRole('button', { name: 'Cookie settings', exact: true }).click();
+  await page.getByRole('button', { name: t.cookie.settings, exact: true }).click();
   expect(
     await page.evaluate(
       () => (window as unknown as Record<string, unknown>)['ga-disable-G-FIXTURE'],
@@ -950,34 +1121,43 @@ test('configured analytics uses real consent code: no optional tag before consen
 
 test('locale switch uses the current hash and query after an in-page navigation', async ({
   page,
+  site,
 }) => {
-  await page.goto('/contact');
-  await dismissConsent(page);
-  await page.getByLabel('Full name', { exact: true }).fill('Current Location Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('current@example.test');
-  await page.locator('.prose a[href$="#inquiry"]').click();
-  await expect(page).toHaveURL('/contact#inquiry');
+  const [first, second] = [homeLocale(site), secondLocale(site)];
+  test.skip(!second, 'single-language site');
+  await page.goto(contactPath(site, first));
+  await dismissConsent(page, site);
+  await page.getByLabel(form(site, first).fullName, { exact: true }).fill('Current Location Buyer');
+  await page.getByLabel(form(site, first).email, { exact: true }).fill('current@example.test');
+  await page.evaluate(() => {
+    location.hash = 'inquiry';
+  });
+  await expect(page).toHaveURL(`${contactPath(site, first)}#inquiry`);
   await page.evaluate(() => history.replaceState(null, '', '?source=current#inquiry'));
-  await page.getByRole('link', { name: 'Español', exact: true }).click();
-  await expect(page).toHaveURL('/es/contact?source=current#inquiry');
-  await expect(page.getByLabel('Nombre completo', { exact: true })).toHaveValue(
+  await languageLink(page, second!).click();
+  await expect(page).toHaveURL(`${contactPath(site, second!)}?source=current#inquiry`);
+  await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
     'Current Location Buyer',
   );
-  await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toHaveValue(
+  await expect(page.getByLabel(form(site, second!).email, { exact: true })).toHaveValue(
     'current@example.test',
   );
-  await page.getByRole('link', { name: 'English', exact: true }).click();
-  await expect(page).toHaveURL('/contact?source=current#inquiry');
+  await languageLink(page, first).click();
+  await expect(page).toHaveURL(`${contactPath(site, first)}?source=current#inquiry`);
 });
 
 test('active inquiry field boundaries have at least 3:1 contrast in both themes', async ({
   page,
+  site,
 }) => {
-  await page.goto('/contact');
-  await dismissConsent(page);
+  const locale = homeLocale(site);
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
   const measurements = [];
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('combobox', { name: 'Theme selector' }).selectOption(theme);
+    await page
+      .getByRole('combobox', { name: site.messages(locale).accessibility.themeSelector })
+      .selectOption(theme);
     for (const name of ['fullName', 'email', 'message']) {
       const field = page.locator(`[name="${name}"]`);
       await expect(field).toBeEditable();
@@ -1023,8 +1203,12 @@ test('active inquiry field boundaries have at least 3:1 contrast in both themes'
 
 test('analytics cleans the same-origin referrer after navigating from a query-bearing landing page', async ({
   page,
+  baseURL,
+  site,
 }) => {
-  await page.route('http://127.0.0.1:4173/**', async (route) => {
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
+  await page.route(`${baseURL}/**`, async (route) => {
     if (route.request().resourceType() !== 'document') return route.continue();
     const response = await route.fetch();
     const html = (await response.text())
@@ -1041,12 +1225,12 @@ test('analytics cleans the same-origin referrer after navigating from a query-be
     });
   });
   await page.goto('/?email=synthetic@example.invalid#private');
-  await page.getByRole('button', { name: 'Customize', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'Analytics', exact: true }).check();
-  await page.getByRole('button', { name: 'Save choices', exact: true }).click();
+  await page.getByRole('button', { name: t.cookie.customize, exact: true }).click();
+  await page.getByRole('checkbox', { name: t.cookie.analytics, exact: true }).check();
+  await page.getByRole('button', { name: t.cookie.saveChoices, exact: true }).click();
   await expect.poll(() => optionalLoads.length).toBe(1);
-  await page.getByRole('link', { name: 'Start an inquiry', exact: true }).click();
-  await expect(page).toHaveURL('/contact');
+  await page.getByRole('link', { name: t.navigation.contactSales, exact: true }).click();
+  await expect(page).toHaveURL(contactPath(site, locale));
   await expect.poll(() => optionalLoads.length).toBe(2);
   const captured = await page.evaluate(() => ({
     referrer: document.referrer,
@@ -1056,8 +1240,8 @@ test('analytics cleans the same-origin referrer after navigating from a query-be
   }));
   expect(captured.referrer).toContain('?email=synthetic@example.invalid');
   expect(captured.config).toMatchObject({
-    page_location: 'http://127.0.0.1:4173/contact',
-    page_referrer: 'http://127.0.0.1:4173/',
+    page_location: `${baseURL}${contactPath(site, locale)}`,
+    page_referrer: `${baseURL}/`,
   });
   expect(JSON.stringify(captured.config)).not.toContain('email=');
   expect(JSON.stringify(captured.config)).not.toContain('#private');
@@ -1067,7 +1251,8 @@ test('analytics cleans the same-origin referrer after navigating from a query-be
   });
 });
 
-test('storage denial keeps unsent details on the current language page', async ({ page }) => {
+test('storage denial keeps unsent details on the current language page', async ({ page, site }) => {
+  test.skip(!secondLocale(site), 'single-language site');
   await page.addInitScript(() => {
     const setItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
@@ -1075,18 +1260,17 @@ test('storage denial keeps unsent details on the current language page', async (
       return setItem.call(this, key, value);
     };
   });
-  for (const [path, label, nextLanguage, message] of [
-    ['/contact', 'Full name', 'Español', 'Your browser cannot preserve this draft'],
-    ['/es/contact', 'Nombre completo', 'English', 'El navegador no permite conservar el borrador'],
-  ]) {
-    await page.goto(path!);
-    await dismissConsent(page);
-    await page.getByLabel(label!, { exact: true }).fill('Unsaved Buyer');
-    await page.getByRole('link', { name: nextLanguage!, exact: true }).click();
-    await expect(page).toHaveURL(path!);
-    await expect(page.locator('[data-form-status]')).toContainText(message!);
+  for (const locale of site.locales) {
+    const f = form(site, locale);
+    const next = site.locales.find((language) => language !== locale)!;
+    await page.goto(contactPath(site, locale));
+    await dismissConsent(page, site);
+    await page.getByLabel(f.fullName, { exact: true }).fill('Unsaved Buyer');
+    await languageLink(page, next).click();
+    await expect(page).toHaveURL(contactPath(site, locale));
+    await expect(page.locator('[data-form-status]')).toContainText(f.localeStorageUnavailable);
     await expect(page.locator('[data-form-status]')).toBeFocused();
-    await expect(page.getByLabel(label!, { exact: true })).toHaveValue('Unsaved Buyer');
+    await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('Unsaved Buyer');
   }
 });
 
@@ -1100,8 +1284,8 @@ const analyticsFields = [
   'capturedAt',
 ];
 const advertisingFields = ['gclid', 'wbraid', 'gbraid'];
-const attributedContact =
-  '/contact?utm_source=SourceMarker&utm_medium=MediumMarker&utm_campaign=CampaignMarker&utm_term=TermMarker&utm_content=ContentMarker&gclid=GclidMarker&wbraid=WbraidMarker&gbraid=GbraidMarker';
+const attribution =
+  '?utm_source=SourceMarker&utm_medium=MediumMarker&utm_campaign=CampaignMarker&utm_term=TermMarker&utm_content=ContentMarker&gclid=GclidMarker&wbraid=WbraidMarker&gbraid=GbraidMarker';
 
 for (const choice of [
   { name: 'denied', analytics: false, advertising: false },
@@ -1112,22 +1296,21 @@ for (const choice of [
   test(`inquiry works with ${choice.name} consent and sends only permitted attribution`, async ({
     page,
     request,
+    controlURL,
+    site,
   }) => {
-    await page.goto(attributedContact);
-    await expect(page.locator('[data-cookie-banner]')).toContainText(
-      'campaign/source details with your inquiry',
-    );
-    await expect(page.locator('[data-cookie-banner]')).toContainText('saves ad click IDs');
-    await expect(page.locator('[data-cookie-banner]')).toContainText(
-      'send an inquiry without either choice',
-    );
+    const locale = homeLocale(site);
+    const t = site.messages(locale);
+    await page.goto(`${contactPath(site, locale)}${attribution}`);
+    // The banner explains attribution before anything is stored.
+    await expect(page.locator('[data-cookie-banner]')).toContainText(t.cookie.description);
     expect(await page.evaluate(() => sessionStorage.getItem('inquiry_attribution'))).toBeNull();
-    await page.getByRole('button', { name: 'Customize', exact: true }).click();
+    await page.getByRole('button', { name: t.cookie.customize, exact: true }).click();
     if (choice.analytics)
-      await page.getByRole('checkbox', { name: 'Analytics', exact: true }).check();
+      await page.getByRole('checkbox', { name: t.cookie.analytics, exact: true }).check();
     if (choice.advertising)
-      await page.getByRole('checkbox', { name: 'Advertising', exact: true }).check();
-    await page.getByRole('button', { name: 'Save choices', exact: true }).click();
+      await page.getByRole('checkbox', { name: t.cookie.advertising, exact: true }).check();
+    await page.getByRole('button', { name: t.cookie.saveChoices, exact: true }).click();
     const expected = [
       ...(choice.analytics ? analyticsFields : []),
       ...(choice.advertising ? advertisingFields : []),
@@ -1136,16 +1319,16 @@ for (const choice of [
       JSON.parse(sessionStorage.getItem('inquiry_attribution') || '{}'),
     );
     expect(Object.keys(stored).sort()).toEqual(expected);
-    await page.getByLabel('Full name', { exact: true }).fill('Consent Buyer');
-    await page.getByLabel('Email address', { exact: true }).fill('consent@example.test');
+    await page.getByLabel(t.inquiry.form.fullName, { exact: true }).fill('Consent Buyer');
+    await page.getByLabel(t.inquiry.form.email, { exact: true }).fill('consent@example.test');
     const submitted = page.waitForRequest((request) => request.url().includes('/_actions/inquiry'));
-    await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
+    await page.getByRole('button', { name: t.inquiry.form.submit, exact: true }).click();
     const payload = JSON.parse((await submitted).postData()!);
     expect(
       [...analyticsFields, ...advertisingFields].filter((field) => field in payload).sort(),
     ).toEqual(expected);
     await expect(page.locator('[data-form-status]')).toContainText('INQ-');
-    const { calls } = await (await request.get('http://127.0.0.1:4174')).json();
+    const { calls } = await (await request.get(controlURL)).json();
     const delivered = JSON.stringify(
       calls.filter((call: { url: string }) => /api\.(resend|airtable)\.com/.test(call.url)),
     );
@@ -1159,36 +1342,40 @@ for (const choice of [
 test('first permitted attribution survives navigation, then withdrawal clears it without blocking inquiry', async ({
   page,
   context,
+  site,
 }) => {
-  await page.goto(attributedContact);
-  await page.getByRole('button', { name: 'Allow all', exact: true }).click();
-  const first = await page.evaluate(() =>
+  const first = homeLocale(site);
+  const second = secondLocale(site);
+  const t = site.messages(first);
+  await page.goto(`${contactPath(site, first)}${attribution}`);
+  await page.getByRole('button', { name: t.cookie.acceptAll, exact: true }).click();
+  const stored = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem('inquiry_attribution')!),
   );
   await page.evaluate(() =>
     history.replaceState(null, '', '?utm_source=LaterMarker&gclid=LaterClick#inquiry'),
   );
-  await page.getByRole('link', { name: 'Español', exact: true }).click();
+  if (second) await languageLink(page, second).click();
   await page.reload();
   expect(
     await page.evaluate(() => JSON.parse(sessionStorage.getItem('inquiry_attribution')!)),
-  ).toEqual(first);
+  ).toEqual(stored);
 
   const sibling = await context.newPage();
   await mockWidget(sibling);
   await sibling.goto('/');
-  await sibling.getByRole('button', { name: 'Cookie settings', exact: true }).click();
-  await sibling.getByRole('button', { name: 'Reject all', exact: true }).click();
+  await sibling.getByRole('button', { name: t.cookie.settings, exact: true }).click();
+  await sibling.getByRole('button', { name: t.cookie.rejectAll, exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => sessionStorage.getItem('inquiry_attribution')))
     .toBeNull();
   await page.reload();
-  await page.getByRole('link', { name: 'English', exact: true }).click();
+  if (second) await languageLink(page, first).click();
   expect(await page.evaluate(() => sessionStorage.getItem('inquiry_attribution'))).toBeNull();
-  await page.getByLabel('Full name', { exact: true }).fill('Withdrawn Buyer');
-  await page.getByLabel('Email address', { exact: true }).fill('withdrawn@example.test');
+  await page.getByLabel(t.inquiry.form.fullName, { exact: true }).fill('Withdrawn Buyer');
+  await page.getByLabel(t.inquiry.form.email, { exact: true }).fill('withdrawn@example.test');
   const submitted = page.waitForRequest((request) => request.url().includes('/_actions/inquiry'));
-  await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
+  await page.getByRole('button', { name: t.inquiry.form.submit, exact: true }).click();
   const payload = JSON.parse((await submitted).postData()!);
   expect([...analyticsFields, ...advertisingFields].filter((field) => field in payload)).toEqual(
     [],
@@ -1200,9 +1387,13 @@ test('first permitted attribution survives navigation, then withdrawal clears it
 test('cross-tab category changes clear only disallowed attribution, including on refresh', async ({
   page,
   context,
+  site,
 }) => {
-  await page.goto(attributedContact);
-  await page.getByRole('button', { name: 'Allow all', exact: true }).click();
+  const locale = homeLocale(site);
+  await page.goto(`${contactPath(site, locale)}${attribution}`);
+  await page
+    .getByRole('button', { name: site.messages(locale).cookie.acceptAll, exact: true })
+    .click();
   const sibling = await context.newPage();
   await sibling.goto('/');
   // A storage event carries the same persisted shape as the existing consent UI.
@@ -1245,23 +1436,29 @@ test('cross-tab category changes clear only disallowed attribution, including on
   await sibling.close();
 });
 
-test('click-only campaigns keep landing context only with analytics consent', async ({ page }) => {
+test('click-only campaigns keep landing context only with analytics consent', async ({
+  page,
+  site,
+}) => {
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
   for (const analytics of [true, false]) {
-    await page.goto('/contact?gclid=OnlyClickMarker');
-    await page.getByRole('button', { name: 'Customize', exact: true }).click();
-    if (analytics) await page.getByRole('checkbox', { name: 'Analytics', exact: true }).check();
-    await page.getByRole('checkbox', { name: 'Advertising', exact: true }).check();
-    await page.getByRole('button', { name: 'Save choices', exact: true }).click();
+    await page.goto(`${contactPath(site, locale)}?gclid=OnlyClickMarker`);
+    await page.getByRole('button', { name: t.cookie.customize, exact: true }).click();
+    if (analytics)
+      await page.getByRole('checkbox', { name: t.cookie.analytics, exact: true }).check();
+    await page.getByRole('checkbox', { name: t.cookie.advertising, exact: true }).check();
+    await page.getByRole('button', { name: t.cookie.saveChoices, exact: true }).click();
     const expected = (analytics ? ['gclid', 'landingPage', 'capturedAt'] : ['gclid']).sort();
     const snapshot = await page.evaluate(() =>
       JSON.parse(sessionStorage.getItem('inquiry_attribution')!),
     );
     expect(Object.keys(snapshot).sort()).toEqual(expected);
-    if (analytics) expect(snapshot.landingPage).toBe('/contact');
-    await page.getByLabel('Full name', { exact: true }).fill('Click Only Buyer');
-    await page.getByLabel('Email address', { exact: true }).fill('click-only@example.test');
+    if (analytics) expect(snapshot.landingPage).toBe(contactPath(site, locale));
+    await page.getByLabel(t.inquiry.form.fullName, { exact: true }).fill('Click Only Buyer');
+    await page.getByLabel(t.inquiry.form.email, { exact: true }).fill('click-only@example.test');
     const submitted = page.waitForRequest((request) => request.url().includes('/_actions/inquiry'));
-    await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
+    await page.getByRole('button', { name: t.inquiry.form.submit, exact: true }).click();
     const payload = JSON.parse((await submitted).postData()!);
     expect(
       [...analyticsFields, ...advertisingFields].filter((field) => field in payload).sort(),
