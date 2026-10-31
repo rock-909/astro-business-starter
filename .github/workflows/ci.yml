@@ -43,3 +43,14 @@ jobs:
       # Same steps as local: check, build:test, test, test:browser.
       - name: Verify
         run: npm run verify
+
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
+  // A stray test.only would otherwise skip the rest of the suite and keep CI green.
+  forbidOnly: !!process.env.CI,
   fullyParallel: false,
   workers: 1,
   timeout: 30_000,

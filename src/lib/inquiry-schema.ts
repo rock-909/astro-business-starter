@@ -55,7 +55,7 @@ function normalizeOptionalInput(value: unknown): unknown {
 // 在 zod 默认邮箱正则基础上只放宽浏览器 type="email" 接受的两类：
 // local part 允许 & 和 #，顶级域允许 xn-- punycode；域名仍至少要有一个点。
 const BUYER_EMAIL_PATTERN =
-  // eslint-disable-next-line security/detect-unsafe-regex -- 结构与 zod 默认邮箱正则相同：每个域名标签以 . 结尾、无歧义回溯，且输入受请求体大小限制。
+  // 回溯安全：结构与 zod 默认邮箱正则相同：每个域名标签以 . 结尾、无歧义回溯，且输入受请求体大小限制。
   /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-.&#]*)[A-Za-z0-9_+\-&#]@([A-Za-z0-9][A-Za-z0-9-]*\.)+([A-Za-z]{2,}|[xX][nN]--[A-Za-z0-9-]*[A-Za-z0-9])$/;
 
 const buyerMessageSchema: ZodType<string | undefined> = unknown()
