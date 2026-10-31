@@ -24,6 +24,7 @@ const globals = window as unknown as Record<string, unknown>;
 let gtag: ((...args: unknown[]) => void) | undefined;
 // The control that reopened the card, so a choice can hand keyboard focus back to it.
 let opener: HTMLElement | null = null;
+let chosenLocale: string | null = null;
 
 function signals(consent: Consent) {
   return {
@@ -209,7 +210,6 @@ syncTheme();
 
 // Language suggestion: when the browser prefers another registered language that this page
 // also exists in, a pill offers it. Never at the same time as the cookie card.
-let chosenLocale: string | null = null;
 function rememberLocale(locale: string) {
   chosenLocale = locale;
   try {
