@@ -28,7 +28,7 @@ npm run verify
 
 已有 Chromium 时可指定 `CHROMIUM_PATH=/absolute/path/to/chromium npm run verify`。人名、邮箱、token 和 provider ID 都是合成测试数据。
 
-`build:test` 同时构建模板和 `tests/derived-site.mjs` 描述的派生站夹具（配置了联系方式、Logo、社交链接并改写了文案，去掉了西语、加了一个通用 About 页面，并对它单独运行 `astro check`），workerd 与浏览器测试对两份构建都运行；期望的页面、语言和文案从各自的 `src/site.ts` 与 messages 读取，所以派生站改文案、改页面、改语言不会让测试误报。浏览器测试使用本地 `127.0.0.1:4173`–`4176`（模板应用与控制服务、派生站应用与控制服务）；同一台机器并行运行多个工作副本时用 `TEST_PORT=<起始端口>` 整体移开。控制服务不进入应用构建。端口上已有服务时，本地默认直接报错而不复用，以免测到别的工作副本或旧构建；确认它服务当前构建后才可用 `PLAYWRIGHT_REUSE_EXISTING_SERVER=true` 复用。
+`build:test` 同时构建模板和 `tests/derived-site.mjs` 描述的派生站夹具（配置了联系方式、Logo、社交链接并改写了文案，去掉了西语、加了一个通用 About 页面和一个页头二级菜单，并对它单独运行 `astro check`），workerd 与浏览器测试对两份构建都运行；期望的页面、语言和文案从各自的 `src/site.ts` 与 messages 读取，所以派生站改文案、改页面、改语言不会让测试误报。浏览器测试使用本地 `127.0.0.1:4173`–`4176`（模板应用与控制服务、派生站应用与控制服务）；同一台机器并行运行多个工作副本时用 `TEST_PORT=<起始端口>` 整体移开。控制服务不进入应用构建。端口上已有服务时，本地默认直接报错而不复用，以免测到别的工作副本或旧构建；确认它服务当前构建后才可用 `PLAYWRIGHT_REUSE_EXISTING_SERVER=true` 复用。
 
 ```sh
 npm run check
@@ -57,15 +57,16 @@ npm run test:browser
 
 ### 常见改造配方
 
-改动后都运行 `npm run verify`。测试从 `src/site-routes.ts` 和 messages 读取页面、语言和文案，改这些内容本身不需要改测试；只有改变行为时才需要。`tests/derived-site.mjs` 是一个完整示例：只留英语并加一个 About 页面。
+改动后都运行 `npm run verify`。测试从 `src/site-routes.ts` 和 messages 读取页面、语言和文案，改这些内容本身不需要改测试；只有改变行为时才需要。`tests/derived-site.mjs` 是一个完整示例：只留英语，加一个 About 页面和一个页头二级菜单。
 
 - **改名换品牌**：改 `src/site-data.json`、`public/` 下的品牌文件、`wrangler.jsonc` 的 `name`，以及每种语言 `messages.json` 里的模板措辞（包括首页标题 `home.metadata.title`，它就是首页的 `<title>`；留空时用 `seo.defaultTitle`）。`npm run readiness` 会列出剩下的模板措辞。
 - **加一个页面**：
-  1. 在 `src/site-routes.ts` 的 `pages` 里加一行，例如 `{ key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true }`。`kind: 'content'` 是普通页面，法律文本用 `kind: 'legal'`，两者有二级标题（h2）时在宽屏右侧显示目录；`nav: 'main'` 出现在页头和页脚第一栏，`nav: 'support'` 只在页脚第二栏，不写 `nav` 就不进导航。
+  1. 在 `src/site-routes.ts` 的 `pages` 里加一行，例如 `{ key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true }`。`kind: 'content'` 是普通页面，法律文本用 `kind: 'legal'`，两者有二级标题（h2）时在宽屏右侧显示目录；`nav: 'main'` 出现在页头和页脚第一栏（联系页在页头是“Start an inquiry”按钮，不重复成导航链接），`nav: 'support'` 只在页脚第二栏，不写 `nav` 就不进导航。
   2. 每种语言写一份 `src/content/<语言>/<key>.ts`，结构与 `contact.ts` 相同（`metadata.title`、`updatedAt`、`seo`、`content`；可选 `metadata.description` 显示为标题下的一句说明，可选 `metadata.faq` 是 `{ question, answer }` 列表，显示在正文后并生成 FAQPage 结构化数据）。少写一份时构建会报出缺的文件名。
   3. 导航文字默认用页面标题。`npm test` 会打开每个页面里的每个站内链接，没登记的页面在这里报 404。
+- **加页头二级菜单**：在 `src/site-routes.ts` 的 `navMenus` 里写分组和链接（已登记的页面，或新标签页打开的 https 外链），每种语言在 `messages.json` 的 `navigation.menus` 下写菜单名、分组名和外链文字；注释里有完整示例。宽屏是整宽面板，手机在抽屉里折叠展开。缺文字或链到没登记的页面时构建失败，`npm run readiness` 也会列出。
 - **去掉一种语言**（如西语）：删掉 `src/site-routes.ts` 里 `localeTable` 的 `es` 那一行，移走 `src/content/es/`，再从 `src/site-data.json` 的 `readiness.legalReviewed` 删掉 `es`（留着会被配置校验拒绝）。只剩一种语言时不显示语言切换，hreflang、og:locale 和 sitemap 只列剩下的语言，旧的 `/es/...` 网址返回 404。
-- **增加一种语言**：在 `localeTable` 加一行（`label` 切换文字、`name` 读屏名称、`ogLocale`），把 `src/content/en/` 复制成 `src/content/<代码>/` 并全部翻译，在 `legalReviewed` 加上这个语言。它的网址在 `/<代码>` 下。第一个语言是默认语言，不加前缀；文案类型以英文 `messages.json` 为准，如果去掉英语，要把 `src/site.ts` 里 `Messages` 的类型来源改成新的默认语言。
+- **增加一种语言**：在 `localeTable` 加一行（`name` 是语言自己的名字，语言菜单里显示它；`ogLocale`），把 `src/content/en/` 复制成 `src/content/<代码>/` 并全部翻译，在 `legalReviewed` 加上这个语言。它的网址在 `/<代码>` 下。第一个语言是默认语言，不加前缀；文案类型以英文 `messages.json` 为准，如果去掉英语，要把 `src/site.ts` 里 `Messages` 的类型来源改成新的默认语言。
 - **改主题色**：`src/styles/global.css` 的浅色、`[data-theme='dark']` 和系统深色三块一起改。`npm run test:browser` 会检查两个深色块一致，以及主要文字与背景在两种主题下对比度至少 4.5:1。
 
 公开配置在构建时使用，Cloudflare 运行时另需服务端绑定及域名/主机配置。所有示例均不含真实凭证。不要将服务端 secret 放入 `PUBLIC_*`。

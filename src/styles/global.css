@@ -82,6 +82,8 @@
   --link-underline: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
   --nav-link-underline: var(--neutral-7);
   --theme-switch-icon: oklch(0.66 0.006 248);
+  /* A configured logo is drawn for light backgrounds; dark themes invert it. */
+  --logo-filter: none;
 
   --control-height-sm: 2rem;
   --control-height: 2.5rem;
@@ -137,6 +139,7 @@
   --popover: var(--neutral-2);
   --nav-link-underline: var(--neutral-8);
   --theme-switch-icon: var(--neutral-10);
+  --logo-filter: invert(1);
   /* Dark primary buttons use the bright step 9 with near-black text. */
   --button-primary-bg: var(--brand-9);
   --button-primary-hover-bg: var(--brand-10);
@@ -183,6 +186,7 @@
     --popover: var(--neutral-2);
     --nav-link-underline: var(--neutral-8);
     --theme-switch-icon: var(--neutral-10);
+    --logo-filter: invert(1);
     /* Dark primary buttons use the bright step 9 with near-black text. */
     --button-primary-bg: var(--brand-9);
     --button-primary-hover-bg: var(--brand-10);
@@ -322,15 +326,6 @@ button:disabled {
 .skip-link:focus {
   transform: none;
 }
-.site-header {
-  border-bottom: 1px solid var(--border);
-}
-.header-row {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  min-height: 92px;
-}
 .brand {
   display: flex;
   align-items: center;
@@ -342,53 +337,494 @@ button:disabled {
 a.brand:is(:hover, :active) {
   opacity: 0.8;
 }
-.brand-mark {
-  width: 36px;
-  height: 36px;
+/* Header, after the reference site: sticky, 64px, translucent with a blur, 1080px wide.
+   Below 840px the navigation and language menu move into the phone drawer. */
+html {
+  /* Anchors and focused controls scroll clear of the sticky header (WCAG 2.4.11). */
+  scroll-padding-top: calc(var(--header-height) + env(safe-area-inset-top, 0px) + 8px);
+}
+:root {
+  --header-height: 4rem;
+}
+.site-header {
+  position: sticky;
+  z-index: 50;
+  top: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--background) 80%, transparent);
+  /* Prefixed first: Lightning CSS drops the unprefixed declaration when it comes first. */
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition:
+    background-color 200ms,
+    border-color 200ms;
+}
+/* An open submenu panel continues the header, so the header turns solid with it. */
+.site-header[data-nav-enhanced]:has([data-nav-panel]:not([hidden])) {
+  background: var(--background);
+}
+.header-inner {
   display: grid;
-  place-items: center;
-  background: var(--button-primary-bg);
-  color: var(--button-primary-fg);
-  border-radius: 9px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  max-width: 1080px;
+  height: var(--header-height);
+  margin-inline: auto;
+  padding-inline: 24px;
 }
-.brand-mark svg {
-  width: 23px;
-  height: 23px;
-}
-.main-nav {
-  margin-left: auto;
+.header-left {
+  grid-column: 1;
   display: flex;
   align-items: center;
-  gap: 28px;
-  font-size: 14px;
+  gap: 16px;
+  min-width: 0;
+  margin-left: -4px;
+  padding: 0 12px 0 4px;
+  overflow-x: clip;
 }
-.main-nav a {
+.site-header .brand {
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 2px;
+  transition: opacity var(--transition-colors);
+}
+.site-header .brand img {
+  display: block;
+  width: auto;
+  height: 32px;
+  filter: var(--logo-filter);
+  transition: filter 200ms;
+}
+.header-nav {
+  grid-column: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.header-nav > ul,
+.header-nav ul,
+.language-panel,
+.mobile-nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.header-nav > ul {
+  display: flex;
+  align-items: center;
+}
+@media (min-width: 1200px) {
+  .header-nav > ul {
+    gap: 4px;
+  }
+}
+.header-right {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+/* Top-level items: grey, the current page and the hovered or open item in foreground,
+   never underlined. Hovering or opening another item turns the current one grey. */
+.header-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: none;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
 }
-/* Both header navs: grey items, the current one and the hovered one in foreground, no underline.
-   While another item is hovered the current one turns grey, so one item is highlighted at a time. */
-.main-nav a,
-.language-nav a {
-  color: var(--muted-foreground);
-}
-.main-nav a:is(:hover, :active, [aria-current='page']),
-.language-nav a:is(:hover, :active, [aria-current='page']) {
+.header-nav-item:is([aria-current='page'], [aria-expanded='true']),
+[data-header-nav] > li:hover > .header-nav-item {
   color: var(--foreground);
 }
-.main-nav:has(a:hover) a[aria-current='page']:not(:hover),
-.language-nav:has(a:hover) a[aria-current='page']:not(:hover) {
+[data-header-nav]:has(> li:hover) > li:not(:hover) > .header-nav-item,
+[data-header-nav]:has([aria-expanded='true']) > li:not(:hover) > [aria-current='page'] {
   color: var(--muted-foreground);
 }
-.language-nav {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding-left: 24px;
-  border-left: 1px solid var(--border);
-  font-size: 13px;
+.site-header svg {
+  flex-shrink: 0;
 }
-.language-nav a {
-  padding: 8px 0;
+.site-header .icon {
+  width: 16px;
+  height: 16px;
+}
+.header-nav-item .chevron {
+  width: 14px;
+  height: 14px;
+}
+.chevron {
+  transition: rotate 150ms ease-out;
+}
+[aria-expanded='true'] > .chevron,
+.language-menu[open] > summary .chevron,
+details[open] > summary .chevron {
+  rotate: 180deg;
+}
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+/* Desktop submenu: a full-width panel under the header that dims the page below it. */
+.nav-panel {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+/* Without the script a panel shows while its item is hovered or holds focus. */
+.site-header:not([data-nav-enhanced]) .nav-menu:not(:hover, :focus-within) > .nav-panel {
+  display: none;
+}
+/* Bridges the gap between the button and the panel so the pointer can cross it. */
+.nav-panel::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 100%;
+  height: 16px;
+}
+.nav-panel::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: 100dvh;
+  background: color-mix(in oklab, var(--background) 50%, transparent);
+  pointer-events: none;
+}
+.nav-panel-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 16px;
+  max-width: 1080px;
+  margin-inline: auto;
+  padding: 4px 24px 24px;
+}
+.nav-group {
+  min-width: 250px;
+}
+.nav-group-heading {
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.nav-group ul {
+  display: flex;
+  flex-direction: column;
+  margin-top: 5px;
+}
+.nav-sub-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 2px;
+  color: var(--foreground);
+  font-size: 20px;
+  line-height: 32px;
+}
+/* Hover draws a thin light line under the text only, never under the ↗. */
+.nav-sub-link > span:first-child {
+  text-decoration: underline 1px transparent;
+  text-underline-offset: 5px;
+}
+.nav-sub-link:hover > span:first-child {
+  text-decoration-color: var(--nav-link-underline);
+}
+/* Language menu: a globe button with a rounded list; the current language has a check. */
+.language-menu {
+  position: relative;
+  display: none;
+  align-items: center;
+  height: 40px;
+}
+.language-menu > summary {
+  gap: 6px;
+}
+.language-menu > summary .chevron {
+  width: 16px;
+  height: 16px;
+}
+.language-menu[open] > summary {
+  color: var(--foreground);
+}
+.language-panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px - 4px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow);
+  transform-origin: top right;
+  transition:
+    opacity 150ms cubic-bezier(0.2, 0, 0, 1),
+    transform 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.language-menu:not([open]) .language-panel {
+  display: none;
+}
+@starting-style {
+  .language-menu[open] .language-panel {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+.language-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+.language-option .icon {
+  margin-left: auto;
+}
+/* Items change text colour only, no grey highlight block. */
+.language-option:is(:hover, :focus-visible, [aria-current='true']) {
+  color: var(--foreground);
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: none;
+  color: var(--foreground);
+}
+.icon-button:hover {
+  background: var(--muted);
+}
+.header-cta {
+  display: inline-flex;
+}
+.mobile-menu {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+/* Phone menu without the script: a panel under the button. */
+.mobile-fallback-panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(20rem, calc(100vw - 2rem));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow);
+}
+.mobile-nav {
+  display: flex;
+  flex-direction: column;
+}
+.mobile-nav > ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mobile-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  color: var(--muted-foreground);
+  font-size: 16px;
+  font-weight: 500;
+}
+.mobile-nav-item:is(:hover, [aria-current='page']),
+details[open] > .mobile-nav-item {
+  color: var(--foreground);
+}
+.mobile-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 8px 12px 16px;
+}
+.mobile-group-heading {
+  margin-bottom: 8px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+.mobile-group-body ul {
+  display: flex;
+  flex-direction: column;
+  margin-inline: -12px;
+}
+.mobile-sub-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  color: var(--foreground);
+  font-size: 16px;
+}
+.mobile-cta {
+  padding-top: 12px;
+}
+.mobile-cta .button {
+  width: 100%;
+  height: 44px;
+  font-size: 16px;
+}
+.mobile-language {
+  /* 16px plus the 4px the reference site's stacked navigation adds between blocks. */
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.mobile-language-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-language ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+.mobile-language-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 12px 0 36px;
+  border-radius: var(--control-radius);
+  color: var(--muted-foreground);
+  font-size: 16px;
+  font-weight: 500;
+}
+.mobile-language-option:is(:hover, :focus-visible, [aria-current='true']) {
+  color: var(--foreground);
+}
+/* Phone drawer: a modal dialog sliding in from the right over a dimmed page. */
+html.drawer-open {
+  overflow: hidden;
+}
+.drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: 320px;
+  max-width: 100%;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow);
+  overflow-y: auto;
+  translate: 100% 0;
+  transition:
+    translate 300ms ease-in-out,
+    overlay 300ms allow-discrete,
+    display 300ms allow-discrete;
+}
+.drawer[open]:not([data-closing]) {
+  translate: 0 0;
+  transition-duration: 500ms;
+}
+@starting-style {
+  .drawer[open] {
+    translate: 100% 0;
+  }
+}
+.drawer::backdrop {
+  background: var(--overlay-scrim);
+  opacity: 0;
+  transition:
+    opacity 300ms ease-in-out,
+    overlay 300ms allow-discrete,
+    display 300ms allow-discrete;
+}
+.drawer[open]:not([data-closing])::backdrop {
+  opacity: 1;
+  transition-duration: 500ms;
+}
+@starting-style {
+  .drawer[open]::backdrop {
+    opacity: 0;
+  }
+}
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+  padding: 16px;
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 40px;
+}
+.drawer-title {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drawer-head .icon-button {
+  margin-right: -4px;
+}
+@media (min-width: 640px) {
+  .drawer {
+    width: 360px;
+  }
+}
+@media (min-width: 840px) {
+  .header-inner {
+    grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
+    column-gap: 16px;
+  }
+  .header-nav,
+  .language-menu {
+    display: flex;
+  }
+  .mobile-menu {
+    display: none;
+  }
 }
 h1,
 h2,
@@ -1051,30 +1487,6 @@ textarea[aria-invalid='true'] {
   .wrap {
     width: calc(100% - 40px);
   }
-  .header-row {
-    flex-wrap: wrap;
-    gap: 10px;
-    min-height: 88px;
-    padding: 18px 0;
-  }
-  .brand {
-    font-size: 14px;
-  }
-  /* Registered pages each add a link; wrap them instead of widening the page. */
-  .main-nav {
-    flex-wrap: wrap;
-    gap: 8px 18px;
-    font-size: 12px;
-  }
-  .language-nav {
-    padding-left: 12px;
-    gap: 6px;
-  }
-  /* WCAG 2.2 SC 2.5.8: two-letter links need a 24px-wide target at this spacing. */
-  .language-nav a {
-    min-width: 24px;
-    text-align: center;
-  }
   .footer-top {
     grid-template-columns: 1fr 1fr;
     gap: 24px;
@@ -1104,14 +1516,6 @@ textarea[aria-invalid='true'] {
   }
 }
 @media (max-width: 420px) {
-  .main-nav {
-    order: 3;
-    width: 100%;
-    margin-left: 48px;
-  }
-  .language-nav {
-    margin-left: auto;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,

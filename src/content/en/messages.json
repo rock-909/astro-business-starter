@@ -9,7 +9,11 @@
     "mainNavigation": "Main navigation",
     "themeSelector": "Theme selector",
     "opensInNewTab": "opens in a new tab",
-    "footerNavigation": "Footer navigation"
+    "footerNavigation": "Footer navigation",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "mobileNavigation": "Mobile navigation menu",
+    "language": "Languages: {language}"
   },
   "cookie": {
     "title": "Cookie preferences",

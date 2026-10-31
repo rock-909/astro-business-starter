@@ -11,11 +11,10 @@ import {
   canonical,
   shouldIndex,
   jsonLd,
-  localizedPath,
-  unlocalizedPath,
   type Locale,
   type PageKey,
 } from '../site';
+import SiteHeader from '../components/SiteHeader.astro';
 import '../styles/global.css';
 interface Props {
   locale: Locale;
@@ -109,62 +108,7 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
     <a class="skip-link" href="#main-content">
       {t.accessibility.skipToContent}
     </a>
-    <header class="site-header">
-      <div class="wrap header-row">
-        <a class="brand" href={pathFor(locale, 'home')}>
-          {site.brandAssets.logo?.status === 'ready' ? (
-            <img
-              src={site.brandAssets.logo.horizontal}
-              width={site.brandAssets.logo.width}
-              height={site.brandAssets.logo.height}
-              alt={site.name}
-            />
-          ) : (
-            <>
-              {/* The template mark stands in only until a derived site configures its own logo. */}
-              <span class="brand-mark" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M3 4h18v12H10l-5 4v-4H3z" stroke="currentColor" stroke-width="1.6" />
-                  <path d="M7 8h10M7 12h6" stroke="currentColor" stroke-width="1.5" />
-                </svg>
-              </span>
-              <span>{site.name}</span>
-            </>
-          )}
-        </a>
-        <nav class="main-nav" aria-label={t.accessibility.mainNavigation}>
-          {navPages('main').map(({ key }) => (
-            <a
-              href={pathFor(locale, key)}
-              aria-current={page === key && !notFound ? 'page' : undefined}
-            >
-              {navLabel(key, { contact: t.navigation.contactSales })}
-            </a>
-          ))}
-        </nav>
-        {/* A single-language site has nothing to switch to. */}
-        {locales.length > 1 && (
-          <nav class="language-nav" aria-label={t.navigation.language}>
-            {locales.map((language) => (
-              <a
-                data-locale-link={language}
-                href={
-                  notFound
-                    ? localizedPath(language, unlocalizedPath(Astro.url.pathname))
-                    : pathFor(language, page)
-                }
-                lang={language}
-                hreflang={language}
-                aria-current={language === locale ? 'page' : undefined}
-                aria-label={localeTable[language].name}
-              >
-                {localeTable[language].label}
-              </a>
-            ))}
-          </nav>
-        )}
-      </div>
-    </header>
+    <SiteHeader locale={locale} page={page} notFound={notFound} />
     {import.meta.env.PUBLIC_APP_ENV !== 'production' && (
       <div class="experiment-strip">
         <p class="wrap">

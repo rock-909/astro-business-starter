@@ -1,7 +1,15 @@
 /** Site identity, copy and page content, resolved from the registry in `site-routes.ts`. */
 import identity from './site-data.json';
 import { assertValidSiteConfig } from './site-schema';
-import { locales, pages, localizedPath, type Locale, type PageKey } from './site-routes';
+import {
+  locales,
+  pages,
+  localizedPath,
+  navMenuIssues,
+  type Locale,
+  type NavMenu,
+  type PageKey,
+} from './site-routes';
 import type defaultMessages from './content/en/messages.json';
 
 export {
@@ -10,6 +18,9 @@ export {
   defaultLocale,
   localeTable,
   localeOfPath,
+  navMenus,
+  type NavMenu,
+  type NavMenuLink,
   localizedPath,
   unlocalizedPath,
   type Locale,
@@ -90,6 +101,19 @@ const faqProblems = Object.entries(pageFiles).flatMap(([file, page]) => {
 if (faqProblems.length) throw new Error(`Invalid page FAQ:\n${faqProblems.join('\n')}`);
 export function messages(locale: Locale): Messages {
   return messageFiles[`./content/${locale}/messages.json`]!;
+}
+// A submenu without its labels in some language, or linking an unknown page, fails the build.
+const menuIssues = locales.flatMap((locale) => navMenuIssues(locale, messages(locale)));
+if (menuIssues.length)
+  throw new Error(`Header submenus are misconfigured:\n${menuIssues.join('\n')}`);
+/** A submenu's labels in one language; `navMenuIssues` has checked they all exist. */
+export function menuLabels(locale: Locale, menu: NavMenu) {
+  const navigation = messages(locale).navigation as { menus?: Record<string, unknown> };
+  return navigation.menus![menu.key] as {
+    label: string;
+    groups: Record<string, string>;
+    links?: Record<string, string>;
+  };
 }
 export function pageContent(locale: Locale, page: Exclude<PageKey, 'home'>): ContentPage {
   return pageFiles[`./content/${locale}/${page}.ts`]!;

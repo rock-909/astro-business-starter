@@ -1,7 +1,8 @@
 // A derived site as owners usually configure one: contact methods, a logo, social
 // links, company facts and rewritten copy. It also makes the two structural changes an
-// owner makes in src/site-routes.ts: it drops Spanish (English only) and adds a generic
-// About page, so a single-language site with an extra page must build and pass. Tests run against its build as well as the
+// owner makes in src/site-routes.ts: it drops Spanish (English only), adds a generic
+// About page and configures a header submenu, so a single-language site with an extra page
+// and grouped navigation must build and pass. Tests run against its build as well as the
 // template's, so neither the layouts only derived sites render nor template wording can
 // hide from CI. Sentinel domains only; nothing here is contacted.
 import {
@@ -108,6 +109,25 @@ const replaceOnce = (text, pattern, replacement) => {
   if (!pattern.test(text)) throw new Error(`Derived fixture cannot find ${pattern} in site-routes`);
   return text.replace(pattern, replacement);
 };
+// One header submenu with two groups: registered pages and an external catalogue link.
+export const derivedMenu = {
+  key: 'resources',
+  groups: [
+    {
+      key: 'company',
+      links: [
+        { page: 'about' },
+        { key: 'catalogue', href: 'https://catalogue.northwind.example.com/', external: true },
+      ],
+    },
+    { key: 'legal', links: [{ page: 'terms' }] },
+  ],
+};
+const menuLabels = {
+  label: 'Resources',
+  groups: { company: 'Company', legal: 'Legal' },
+  links: { catalogue: 'Valve catalogue' },
+};
 const copy = {
   en: {
     messages: {
@@ -162,6 +182,11 @@ export function writeDerivedSite(repo = '.') {
       /^( *\{ key: 'contact'.*\n)/m,
       `$1  { key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true },\n`,
     );
+  registry = replaceOnce(
+    registry,
+    /^export const navMenus: readonly NavMenu\[\] = \[\];$/m,
+    `export const navMenus: readonly NavMenu[] = [${JSON.stringify(derivedMenu)}];`,
+  );
   writeFileSync(routes, registry);
   for (const locale of keptLocales) {
     const file = join(root, `src/content/${locale}/about.ts`);
@@ -185,6 +210,7 @@ export function writeDerivedSite(repo = '.') {
     const messages = JSON.parse(readFileSync(file, 'utf8'));
     for (const [path, value] of Object.entries(copy[locale].messages))
       setPath(messages, path, value);
+    messages.navigation.menus = { [derivedMenu.key]: menuLabels };
     writeFileSync(file, JSON.stringify(messages, null, 2));
     for (const [page, title] of Object.entries(copy[locale].pages))
       writeFileSync(

@@ -18,7 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { assertValidSiteConfig } from '../src/site-schema.ts';
-import { locales } from '../src/site-routes.ts';
+import { locales, navMenuIssues } from '../src/site-routes.ts';
 import {
   launchEnv,
   readinessIssues,
@@ -155,6 +155,77 @@ test('every registered language defines the same message keys with the same valu
     ).sort(),
   }));
   for (const { locale, keys } of others) assert.deepEqual(keys, reference.keys, locale);
+});
+
+test('header submenus need registered pages, https links and labels in every language', () => {
+  const menu = {
+    key: 'products',
+    groups: [
+      {
+        key: 'machines',
+        links: [
+          { page: 'contact' },
+          { key: 'catalogue', href: 'https://catalogue.supplier.co.uk/', external: true },
+        ],
+      },
+    ],
+  };
+  const labels = {
+    navigation: {
+      menus: {
+        products: {
+          label: 'Products',
+          groups: { machines: 'Machines' },
+          links: { catalogue: 'Catalogue' },
+        },
+      },
+    },
+  };
+  assert.deepEqual(navMenuIssues('en', labels, [menu]), []);
+  // The template configures none, so its own messages need no submenu labels.
+  for (const locale of locales)
+    assert.deepEqual(
+      navMenuIssues(
+        locale,
+        JSON.parse(
+          readFileSync(new URL(`../src/content/${locale}/messages.json`, import.meta.url), 'utf8'),
+        ),
+      ),
+      [],
+    );
+  // A language missing its labels is named, label by label, instead of rendering blanks.
+  assert.deepEqual(navMenuIssues('es', { navigation: {} }, [menu]), [
+    'es/messages navigation.menus.products.label is missing',
+    'es/messages navigation.menus.products.groups.machines is missing',
+    'es/messages navigation.menus.products.links.catalogue is missing',
+  ]);
+  const blank = structuredClone(labels);
+  blank.navigation.menus.products.label = '  ';
+  assert.deepEqual(navMenuIssues('en', blank, [menu]), [
+    'en/messages navigation.menus.products.label is missing',
+  ]);
+  const broken = {
+    key: 'Products',
+    groups: [
+      {
+        key: 'machines',
+        links: [
+          { page: 'catalogue' },
+          { key: 'catalogue', href: 'javascript:alert(1)', external: true },
+        ],
+      },
+    ],
+  };
+  assert.deepEqual(navMenuIssues('en', labels, [broken, { ...menu, groups: [] }, menu]), [
+    'Submenu key "Products" must be unique lowercase letters, digits and -',
+    'en/messages navigation.menus.Products.label is missing',
+    'en/messages navigation.menus.Products.groups.machines is missing',
+    'Submenu Products links unregistered page "catalogue"',
+    'Submenu link Products.catalogue must be an https URL',
+    'en/messages navigation.menus.Products.links.catalogue is missing',
+    'Submenu products needs at least one group',
+    'Submenu key "products" must be unique lowercase letters, digits and -',
+  ]);
 });
 
 test('legal approval is recorded once per registered language, no more and no fewer', () => {

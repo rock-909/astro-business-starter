@@ -1,0 +1,349 @@
+---
+import {
+  site,
+  locales,
+  localeTable,
+  pages,
+  navMenus,
+  messages,
+  menuLabels,
+  pageContent,
+  pathFor,
+  localizedPath,
+  unlocalizedPath,
+  type Locale,
+  type NavMenu,
+  type NavMenuLink,
+  type PageKey,
+} from '../site';
+interface Props {
+  locale: Locale;
+  page: PageKey;
+  notFound: boolean;
+}
+const { locale, page, notFound } = Astro.props;
+const t = messages(locale);
+// The contact page is the call-to-action button, so the navigation does not repeat it.
+const navPages = pages.filter(
+  (item) => 'nav' in item && item.nav === 'main' && item.key !== 'contact',
+);
+const pageLabel = (key: PageKey) =>
+  key === 'home' ? t.navigation.home : pageContent(locale, key).metadata.title;
+const current = (key: PageKey) => (key === page && !notFound ? ('page' as const) : undefined);
+const languageHref = (language: Locale) =>
+  notFound ? localizedPath(language, unlocalizedPath(Astro.url.pathname)) : pathFor(language, page);
+// Typed wide: on a single-language site the comparisons below would otherwise infer `never`.
+const languages: Locale[] = locales;
+const multilingual = languages.length > 1;
+const languageName = (language: Locale) => localeTable[language].name;
+const logo = site.brandAssets.logo?.status === 'ready' ? site.brandAssets.logo : undefined;
+const links = (menu: NavMenu, links: readonly NavMenuLink[]) =>
+  links.map((link) =>
+    'page' in link
+      ? {
+          href: pathFor(locale, link.page),
+          label: pageLabel(link.page),
+          current: current(link.page),
+        }
+      : { href: link.href, label: menuLabels(locale, menu).links![link.key]!, external: true },
+  );
+// Lucide icon paths (ISC licence), drawn inline so the header needs no icon package.
+const icons = {
+  globe:
+    '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+};
+const svg = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  'stroke-width': '2',
+  'stroke-linecap': 'round',
+  'stroke-linejoin': 'round',
+  'aria-hidden': 'true',
+} as const;
+---
+
+<header class="site-header" data-site-header>
+  <div class="header-inner">
+    <div class="header-left">
+      {/* Like the reference site, the header shows a configured logo only, never the site name. */}
+      {logo && (
+        <a class="brand" href={pathFor(locale, 'home')}>
+          <img src={logo.horizontal} width={logo.width} height={logo.height} alt={site.name} />
+        </a>
+      )}
+    </div>
+    {(navPages.length > 0 || navMenus.length > 0) && (
+      <nav class="header-nav" aria-label={t.accessibility.mainNavigation}>
+        <ul data-header-nav>
+          {navPages.map(({ key }) => (
+            <li>
+              <a class="header-nav-item" href={pathFor(locale, key)} aria-current={current(key)}>
+                {pageLabel(key)}
+              </a>
+            </li>
+          ))}
+          {navMenus.map((menu) => {
+            const labels = menuLabels(locale, menu);
+            return (
+              <li class="nav-menu" data-nav-menu={menu.key}>
+                <button
+                  type="button"
+                  class="header-nav-item"
+                  aria-expanded="false"
+                  aria-controls={`header-nav-panel-${menu.key}`}
+                  data-nav-trigger={menu.key}
+                >
+                  {labels.label}
+                  <svg class="chevron" {...svg} set:html={icons.chevron} />
+                </button>
+                {/* In the HTML even when closed, so the links are read without JavaScript. */}
+                <div class="nav-panel" id={`header-nav-panel-${menu.key}`} data-nav-panel>
+                  <div class="nav-panel-inner">
+                    {menu.groups.map((group) => (
+                      <div class="nav-group">
+                        <div class="nav-group-heading">{labels.groups[group.key]}</div>
+                        <ul aria-label={labels.groups[group.key]}>
+                          {links(menu, group.links).map((link) => (
+                            <li>
+                              {link.external ? (
+                                <a
+                                  class="nav-sub-link"
+                                  href={link.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <span>{link.label}</span>
+                                  <span aria-hidden="true">↗</span>
+                                  <span class="visually-hidden">
+                                    ({t.accessibility.opensInNewTab})
+                                  </span>
+                                </a>
+                              ) : (
+                                <a
+                                  class="nav-sub-link"
+                                  href={link.href}
+                                  aria-current={link.current}
+                                >
+                                  <span>{link.label}</span>
+                                </a>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    )}
+    <div class="header-right">
+      <a class="button small header-cta" href={pathFor(locale, 'contact')}>
+        {t.navigation.contactSales}
+      </a>
+      {multilingual && (
+        <details class="language-menu" data-language-menu>
+          <summary
+            class="header-nav-item"
+            aria-label={t.accessibility.language.replace('{language}', languageName(locale))}
+          >
+            <svg class="icon" {...svg} set:html={icons.globe} />
+            <span lang={locale}>{languageName(locale)}</span>
+            <svg class="chevron" {...svg} set:html={icons.chevron} />
+          </summary>
+          <ul class="language-panel" aria-label={t.navigation.language}>
+            {languages.map((language) =>
+              language === locale ? (
+                <li>
+                  <span class="language-option" aria-current="true" lang={language}>
+                    {languageName(language)}
+                    <svg class="icon" {...svg} set:html={icons.check} />
+                  </span>
+                </li>
+              ) : (
+                <li>
+                  <a
+                    class="language-option"
+                    data-locale-link={language}
+                    href={languageHref(language)}
+                    lang={language}
+                    hreflang={language}
+                  >
+                    {languageName(language)}
+                  </a>
+                </li>
+              ),
+            )}
+          </ul>
+        </details>
+      )}
+      <div class="mobile-menu">
+        {/* Without JavaScript the menu opens as a panel under the button; the script moves
+            the same links into a side drawer instead. */}
+        <details class="mobile-fallback" data-mobile-fallback>
+          <summary class="icon-button" aria-controls="mobile-navigation">
+            <svg class="icon" {...svg} set:html={icons.menu} />
+            <span class="visually-hidden">{t.accessibility.openMenu}</span>
+          </summary>
+          <div class="mobile-fallback-panel" data-mobile-fallback-panel>
+            <nav
+              id="mobile-navigation"
+              class="mobile-nav"
+              aria-label={t.accessibility.mobileNavigation}
+            >
+              <ul>
+                {navPages.map(({ key }) => (
+                  <li>
+                    <a
+                      class="mobile-nav-item"
+                      href={pathFor(locale, key)}
+                      aria-current={current(key)}
+                    >
+                      {pageLabel(key)}
+                    </a>
+                  </li>
+                ))}
+                {navMenus.map((menu) => {
+                  const labels = menuLabels(locale, menu);
+                  return (
+                    <li>
+                      <details class="mobile-group" name="mobile-navigation-groups">
+                        <summary class="mobile-nav-item">
+                          {labels.label}
+                          <svg class="icon chevron" {...svg} set:html={icons.chevron} />
+                        </summary>
+                        <div class="mobile-group-body">
+                          {menu.groups.map((group) => (
+                            <div>
+                              <div class="mobile-group-heading">{labels.groups[group.key]}</div>
+                              <ul aria-label={labels.groups[group.key]}>
+                                {links(menu, group.links).map((link) => (
+                                  <li>
+                                    {link.external ? (
+                                      <a
+                                        class="mobile-sub-link"
+                                        href={link.href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {link.label}
+                                        <span aria-hidden="true">↗</span>
+                                        <span class="visually-hidden">
+                                          ({t.accessibility.opensInNewTab})
+                                        </span>
+                                      </a>
+                                    ) : (
+                                      <a
+                                        class="mobile-sub-link"
+                                        href={link.href}
+                                        aria-current={link.current}
+                                      >
+                                        {link.label}
+                                      </a>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </li>
+                  );
+                })}
+                <li class="mobile-cta">
+                  <a class="button" href={pathFor(locale, 'contact')}>
+                    {t.navigation.contactSales}
+                  </a>
+                </li>
+              </ul>
+              {multilingual && (
+                <details class="mobile-language">
+                  <summary
+                    class="mobile-nav-item"
+                    aria-label={t.accessibility.language.replace(
+                      '{language}',
+                      languageName(locale),
+                    )}
+                  >
+                    <span class="mobile-language-label">
+                      <svg class="icon" {...svg} set:html={icons.globe} />
+                      {t.navigation.language}
+                    </span>
+                    <span class="mobile-language-label">
+                      <span lang={locale}>{languageName(locale)}</span>
+                      <svg class="icon chevron" {...svg} set:html={icons.chevron} />
+                    </span>
+                  </summary>
+                  <ul>
+                    {languages.map((language) => (
+                      <li>
+                        {language === locale ? (
+                          <span class="mobile-language-option" aria-current="true" lang={language}>
+                            {languageName(language)}
+                            <svg class="icon" {...svg} set:html={icons.check} />
+                          </span>
+                        ) : (
+                          <a
+                            class="mobile-language-option"
+                            data-locale-link={language}
+                            href={languageHref(language)}
+                            lang={language}
+                            hreflang={language}
+                          >
+                            {languageName(language)}
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </nav>
+          </div>
+        </details>
+        <button
+          type="button"
+          class="icon-button"
+          data-mobile-open
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls="mobile-drawer"
+          hidden
+        >
+          <svg class="icon" {...svg} set:html={icons.menu} />
+          <span class="visually-hidden">{t.accessibility.openMenu}</span>
+        </button>
+        <dialog
+          class="drawer"
+          id="mobile-drawer"
+          aria-label={t.accessibility.mobileNavigation}
+          data-mobile-drawer
+        >
+          <div class="drawer-body" data-mobile-drawer-body>
+            <div class="drawer-head">
+              <span class="drawer-title" aria-hidden="true">
+                {site.name}
+              </span>
+              <button type="button" class="icon-button" data-mobile-close autofocus>
+                <svg class="icon" {...svg} set:html={icons.close} />
+                <span class="visually-hidden">{t.accessibility.closeMenu}</span>
+              </button>
+            </div>
+          </div>
+        </dialog>
+      </div>
+    </div>
+  </div>
+</header>
+<script>
+  import './header-browser';
+</script>

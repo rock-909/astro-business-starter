@@ -9,7 +9,11 @@
     "mainNavigation": "Navegación principal",
     "themeSelector": "Selector de tema",
     "opensInNewTab": "se abre en una pestaña nueva",
-    "footerNavigation": "Navegación del pie de página"
+    "footerNavigation": "Navegación del pie de página",
+    "openMenu": "Abrir menú de navegación",
+    "closeMenu": "Cerrar menú de navegación",
+    "mobileNavigation": "Menú de navegación móvil",
+    "language": "Idiomas: {language}"
   },
   "cookie": {
     "title": "Preferencias de cookies",
