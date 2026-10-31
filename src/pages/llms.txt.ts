@@ -1,13 +1,16 @@
-import { site, pages, locales, canonical, messages, pageContent } from '../site';
+import { site, pages, locales, localeTable, canonical, messages, pageContent } from '../site';
 export const prerender = true;
 export function GET() {
   const lines = [`# ${site.name}`, '', `> ${site.description}`, ''];
   for (const locale of locales) {
-    lines.push(`## ${locale === 'en' ? 'English' : 'Español'}`, '');
+    lines.push(`## ${localeTable[locale].name}`, '');
     for (const page of pages.filter((page) => page.sitemap)) {
       const content =
         page.key === 'home'
-          ? { title: site.name, description: messages(locale).home.metadata.description }
+          ? {
+              title: messages(locale).home.metadata.title || site.seo.defaultTitle,
+              description: messages(locale).home.metadata.description,
+            }
           : pageContent(locale, page.key).metadata.seo;
       lines.push(`- [${content.title}](${canonical(locale, page.key)}): ${content.description}`);
     }

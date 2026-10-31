@@ -2,11 +2,17 @@
 import {
   site,
   locales,
+  defaultLocale,
+  localeTable,
+  pages,
   messages,
+  pageContent,
   pathFor,
   canonical,
   shouldIndex,
   jsonLd,
+  localizedPath,
+  unlocalizedPath,
   type Locale,
   type PageKey,
 } from '../site';
@@ -21,11 +27,16 @@ interface Props {
 const { locale, page = 'home', title, description, notFound = false } = Astro.props;
 const t = messages(locale);
 const url = canonical(locale, page);
+// The home page title is the whole <title>; other pages go through the template.
 const fullTitle =
-  page === 'home' && !notFound
-    ? site.seo.defaultTitle
-    : site.seo.titleTemplate.replace('%s', title);
-const otherLocale = locale === 'en' ? 'es' : 'en';
+  page === 'home' && !notFound ? title : site.seo.titleTemplate.replace('%s', title);
+// Typed wide: on a single-language site the filter would otherwise infer `never`.
+const otherLocales: Locale[] = locales.filter((language) => language !== locale);
+// Registered pages link themselves; a message under the column's key names the link,
+// otherwise the page's own title does.
+const navPages = (place: 'main' | 'support') => pages.filter((item) => item.nav === place);
+const navLabel = (key: PageKey, labels: Partial<Record<string, string>>) =>
+  labels[key] ?? (key === 'home' ? t.navigation.home : pageContent(locale, key).metadata.title);
 // Brand names for the configured social keys; they are the same in every language.
 const socialNames = { linkedin: 'LinkedIn', twitter: 'X' } satisfies Record<
   keyof typeof site.social,
@@ -64,14 +75,16 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
         {locales.map((language) => (
           <link rel="alternate" hreflang={language} href={canonical(language, page)} />
         ))}
-        <link rel="alternate" hreflang="x-default" href={canonical('en', page)} />
+        <link rel="alternate" hreflang="x-default" href={canonical(defaultLocale, page)} />
         <meta property="og:url" content={url} />
         <meta property="og:type" content="website" />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:site_name" content={site.name} />
-        <meta property="og:locale" content={locale === 'en' ? 'en_US' : 'es_ES'} />
-        <meta property="og:locale:alternate" content={otherLocale === 'en' ? 'en_US' : 'es_ES'} />
+        <meta property="og:locale" content={localeTable[locale].ogLocale} />
+        {otherLocales.map((language) => (
+          <meta property="og:locale:alternate" content={localeTable[language].ogLocale} />
+        ))}
         <meta property="og:image" content={new URL(site.brandAssets.ogImage, site.baseUrl).href} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
@@ -119,39 +132,36 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
           )}
         </a>
         <nav class="main-nav" aria-label={t.accessibility.mainNavigation}>
-          <a
-            href={pathFor(locale, 'home')}
-            aria-current={page === 'home' && !notFound ? 'page' : undefined}
-          >
-            {t.navigation.home}
-          </a>
-          <a
-            href={pathFor(locale, 'contact')}
-            aria-current={page === 'contact' ? 'page' : undefined}
-          >
-            {t.navigation.contactSales}
-          </a>
-        </nav>
-        <nav class="language-nav" aria-label={t.navigation.language}>
-          {locales.map((language) => (
+          {navPages('main').map(({ key }) => (
             <a
-              data-locale-link={language}
-              href={
-                notFound
-                  ? language === 'en'
-                    ? Astro.url.pathname.replace(/^\/es(?=\/|$)/, '') || '/'
-                    : `/es${Astro.url.pathname.replace(/^\/es(?=\/|$)/, '')}`
-                  : pathFor(language, page)
-              }
-              lang={language}
-              hreflang={language}
-              aria-current={language === locale ? 'page' : undefined}
-              aria-label={language === 'en' ? 'English' : 'Español'}
+              href={pathFor(locale, key)}
+              aria-current={page === key && !notFound ? 'page' : undefined}
             >
-              {language === 'en' ? 'EN' : 'ES'}
+              {navLabel(key, { contact: t.navigation.contactSales })}
             </a>
           ))}
         </nav>
+        {/* A single-language site has nothing to switch to. */}
+        {locales.length > 1 && (
+          <nav class="language-nav" aria-label={t.navigation.language}>
+            {locales.map((language) => (
+              <a
+                data-locale-link={language}
+                href={
+                  notFound
+                    ? localizedPath(language, unlocalizedPath(Astro.url.pathname))
+                    : pathFor(language, page)
+                }
+                lang={language}
+                hreflang={language}
+                aria-current={language === locale ? 'page' : undefined}
+                aria-label={localeTable[language].name}
+              >
+                {localeTable[language].label}
+              </a>
+            ))}
+          </nav>
+        )}
       </div>
     </header>
     {import.meta.env.PUBLIC_APP_ENV !== 'production' && (
@@ -173,15 +183,17 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
           <div>
             <h2 class="footer-heading">{t.footer.columns.navigation}</h2>
             <nav class="footer-links" aria-label={t.accessibility.footerNavigation}>
-              <a href={pathFor(locale, 'home')}>{t.footer.sections.navigation.home}</a>
-              <a href={pathFor(locale, 'contact')}>{t.footer.sections.navigation.contact}</a>
+              {navPages('main').map(({ key }) => (
+                <a href={pathFor(locale, key)}>{navLabel(key, t.footer.sections.navigation)}</a>
+              ))}
             </nav>
           </div>
           <div>
             <h2 class="footer-heading">{t.footer.columns.support}</h2>
             <div class="footer-links">
-              <a href={pathFor(locale, 'privacy')}>{t.footer.sections.support.privacy}</a>
-              <a href={pathFor(locale, 'terms')}>{t.footer.sections.support.terms}</a>
+              {navPages('support').map(({ key }) => (
+                <a href={pathFor(locale, key)}>{navLabel(key, t.footer.sections.support)}</a>
+              ))}
               {Object.entries(site.social)
                 .filter(([, href]) => href)
                 .map(([name, href]) => (

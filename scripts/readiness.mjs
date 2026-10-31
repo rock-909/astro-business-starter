@@ -6,6 +6,7 @@ import { isIP } from 'node:net';
 import { loadEnv } from 'vite';
 import { unstable_readConfig } from 'wrangler';
 import { parseAllowedHosts } from '../src/lib/inquiry-hosts.ts';
+import { locales, pages } from '../src/site-routes.ts';
 
 const publicHostname = (host) =>
   !isIP(host) &&
@@ -196,28 +197,38 @@ export function readinessIssues(env = process.env, data, root = new URL('../', i
     issues.push('company.established must not be later than the current year');
   if (!data.contact?.email || sentinel.test(data.contact.email))
     issues.push('A real owner-confirmed public contact email is required');
-  if (!data.readiness?.legalReviewed?.en || !data.readiness?.legalReviewed?.es)
-    issues.push('Both legal locales must be reviewed and approved');
-  for (const locale of ['en', 'es']) {
-    for (const [path, value] of stringLeaves(
-      JSON.parse(read(`src/content/${locale}/messages.json`)),
-    ))
-      if (!templateOnlyKeys.test(path) && templateCopy.test(value))
-        issues.push(`${locale}/messages ${path} still contains template copy`);
-    const contact = createRequire(import.meta.url)(
-      fileURLToPath(new URL(`src/content/${locale}/contact.ts`, root)),
-    ).default;
-    for (const [path, value] of stringLeaves(contact))
-      if (templateCopy.test(value))
-        issues.push(`${locale}/contact ${path} still contains template copy`);
-    for (const page of ['privacy', 'terms']) {
-      const text = read(`src/content/${locale}/${page}.ts`);
-      if (
-        /placeholder|to be completed|incomplete|por completar|incomplet[ao]|marcador de posición/i.test(
-          text,
+  for (const locale of locales)
+    if (data.readiness?.legalReviewed?.[locale] !== true)
+      issues.push(`The ${locale} legal pages must be reviewed and approved`);
+  // Every registered language and page, so a language or page added or removed in
+  // src/site-routes.ts is checked without editing this gate.
+  const exists = (path) => statSync(new URL(path, root), { throwIfNoEntry: false })?.isFile();
+  for (const locale of locales) {
+    const messagesFile = `src/content/${locale}/messages.json`;
+    if (!exists(messagesFile)) issues.push(`${messagesFile} is missing`);
+    else
+      for (const [path, value] of stringLeaves(JSON.parse(read(messagesFile))))
+        if (!templateOnlyKeys.test(path) && templateCopy.test(value))
+          issues.push(`${locale}/messages ${path} still contains template copy`);
+    for (const { key, kind } of pages.filter((page) => page.kind !== 'home')) {
+      const file = `src/content/${locale}/${key}.ts`;
+      if (!exists(file)) {
+        issues.push(`${file} is missing`);
+        continue;
+      }
+      if (kind === 'legal') {
+        if (
+          /placeholder|to be completed|incomplete|por completar|incomplet[ao]|marcador de posición/i.test(
+            read(file),
+          )
         )
-      )
-        issues.push(`${locale}/${page} still contains template legal text`);
+          issues.push(`${locale}/${key} still contains template legal text`);
+        continue;
+      }
+      const page = createRequire(import.meta.url)(fileURLToPath(new URL(file, root))).default;
+      for (const [path, value] of stringLeaves(page))
+        if (templateCopy.test(value))
+          issues.push(`${locale}/${key} ${path} still contains template copy`);
     }
   }
   return [...new Set(issues)];

@@ -1,5 +1,5 @@
 ---
-import type { Locale } from '../../site';
+import { defaultLocale, localeOfPath, localizedPath, type Locale } from '../../site-routes';
 interface Props {
   text: string;
   locale: Locale;
@@ -10,13 +10,14 @@ function linkHref(href: string): string | undefined {
   if (/[\\\u0000-\u0020]/u.test(href) || href.startsWith('//')) return;
   if (/^https?:\/\//i.test(href)) return href;
   if (!href.startsWith('/')) return;
+  // Files and links that already name a language stay as written.
   if (
     /^\/[^?#]*\.[a-z0-9]+(?:[?#]|$)/i.test(href) ||
-    locale === 'en' ||
-    /^\/es(?:\/|[?#]|$)/.test(href)
+    locale === defaultLocale ||
+    localeOfPath(href.replace(/[?#].*$/s, '')) !== defaultLocale
   )
     return href;
-  return `/es${href === '/' ? '' : href}`;
+  return localizedPath(locale, href);
 }
 for (const part of text.split(/(\*\*[^*]+\*\*)/g)) {
   if (!part) continue;

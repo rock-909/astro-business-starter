@@ -567,6 +567,8 @@ for (const root of ['.', derivedRoot]) {
     const h = await startHarness({ root });
     const get = (path, init) => h.mf.dispatchFetch(`http://localhost${path}`, init);
     try {
+      // og:locale of each language version, and the alternates each version declares.
+      const ogLocales = new Map();
       for (const locale of locales) {
         for (const { key } of pages) {
           const path = pathFor(locale, key);
@@ -587,7 +589,48 @@ for (const root of ['.', derivedRoot]) {
           assert.match(html, /noindex,nofollow/);
           assert.equal((html.match(/<main\b/g) || []).length, 1);
           assert.match(html, /rel="canonical"/);
+          const og = (property) =>
+            [...html.matchAll(new RegExp(`property="${property}" content="([^"]+)"`, 'g'))].map(
+              (match) => match[1],
+            );
+          assert.equal(og('og:locale').length, 1, path);
+          ogLocales.set(`${locale} ${key}`, {
+            own: og('og:locale')[0],
+            alternates: og('og:locale:alternate'),
+          });
         }
+      }
+      // A page announces exactly its other language versions; a single-language site none.
+      for (const locale of locales)
+        for (const { key } of pages)
+          assert.deepEqual(
+            ogLocales.get(`${locale} ${key}`).alternates.toSorted(),
+            locales
+              .filter((other) => other !== locale)
+              .map((other) => ogLocales.get(`${other} ${key}`).own)
+              .toSorted(),
+            `${locale} ${key} og:locale:alternate`,
+          );
+      // Every link and alternate a built page declares answers 200 itself, so a page that
+      // is linked but not registered in src/site-routes.ts fails here instead of shipping
+      // as a dead link.
+      const linked = new Set();
+      for (const file of readdirSync(`${root}/dist/client`, { recursive: true }).filter((file) =>
+        file.endsWith('.html'),
+      ))
+        for (const [, href] of readFileSync(`${root}/dist/client/${file}`, 'utf8').matchAll(
+          /<(?:a|link)\b[^>]*?\shref="([^"]+)"/g,
+        )) {
+          const url = new URL(
+            href.replaceAll('&amp;', '&'),
+            `${site.baseUrl}/${file.replace(/(?:^|\/)index\.html$/, '')}`,
+          );
+          if (url.origin === site.baseUrl) linked.add(url.pathname);
+        }
+      assert.ok(linked.has(pathFor(locales[0], 'contact')), 'collects internal links');
+      for (const path of linked) {
+        const response = await get(path, { redirect: 'manual' });
+        assert.equal(response.status, 200, `${path} is linked from a built page`);
       }
       const listed = pages.filter((page) => page.sitemap);
       const sitemap = await (await get('/sitemap.xml')).text();
@@ -657,6 +700,11 @@ for (const root of ['.', derivedRoot]) {
         assert.ok(!client.includes(key), `${key} binding name must not enter browser code`);
       }
       assert.equal(h.state.calls.length, 0);
+      // The Action accepts exactly the registered languages; a removed one is invalid input.
+      for (const locale of new Set([...locales, 'es', 'fr'])) {
+        const response = await action(h, { ...validInput, locale });
+        assert.equal(response.status, locales.includes(locale) ? 200 : 400, locale);
+      }
     } finally {
       await h.close();
     }

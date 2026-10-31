@@ -2,9 +2,10 @@ import { actions, isInputError } from 'astro:actions';
 import { getAttributionSnapshot } from './attribution';
 import { saveDraft, restoreDraft, clearDraft } from './inquiry-draft';
 import { inquiryLimits } from '../lib/inquiry-limits';
-import type en from '../content/en/messages.json';
+import type { Locale } from '../site-routes';
+import type { Messages } from '../site';
 
-type Copy = typeof en.inquiry.form;
+type Copy = Messages['inquiry']['form'];
 interface Turnstile {
   render(element: HTMLElement, options: Record<string, unknown>): string;
   reset(id: string): void;
@@ -186,7 +187,7 @@ form.addEventListener('submit', async (event) => {
         message,
         website: String(data.get('website') || ''),
         turnstileToken: token,
-        locale: form.dataset.locale as 'en' | 'es',
+        locale: form.dataset.locale as Locale,
         ...getAttributionSnapshot(),
       }),
       new Promise<never>((_, reject) => {

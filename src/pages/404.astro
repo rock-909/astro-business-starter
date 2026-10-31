@@ -1,9 +1,9 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
-import { messages, pathFor } from '../site';
+import { messages, pathFor, localeOfPath } from '../site';
 export const prerender = false;
 Astro.response.status = 404;
-const locale = /^\/es(?:\/|$)/.test(Astro.url.pathname) ? 'es' : 'en';
+const locale = localeOfPath(Astro.url.pathname);
 const t = messages(locale);
 ---
 

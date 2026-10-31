@@ -21,7 +21,7 @@ import {
 import { type AttributionFieldName, CLICK_ID_PATTERN } from './attribution';
 import { sanitizeMultilineText, sanitizePlainText } from './text';
 import { inquiryLimits } from './inquiry-limits';
-const LOCALES_CONFIG = { locales: ['en', 'es'] as const };
+import { locales } from '../site-routes';
 const hasSpreadsheetFormulaPrefix = (value: string) => /^[=+\-@]/.test(value);
 
 export const INQUIRY_LEAD_TYPE = 'inquiry' as const;
@@ -75,7 +75,7 @@ export const inquiryLeadSchema = object({
     .refine((value) => !hasSpreadsheetFormulaPrefix(value)),
   message: buyerMessageSchema.optional(),
   // 买家提交时所在页面的语言；只接受站点配置的 locale，不收自由文本。
-  locale: zEnum(LOCALES_CONFIG.locales).optional(),
+  locale: zEnum(locales).optional(),
   ...leadAttributionFields,
 });
 

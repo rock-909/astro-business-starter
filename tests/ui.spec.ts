@@ -99,6 +99,12 @@ test('every configured page has localized HTML, reciprocal SEO and truthful noin
       expect(response?.request().redirectedFrom(), `${path} must not redirect`).toBeNull();
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+      if (key === 'home') {
+        // Each language titles its own home page, for search results and share cards.
+        const title = site.messages(locale).home.metadata.title || site.site.seo.defaultTitle;
+        await expect(page).toHaveTitle(title);
+        await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', title);
+      }
       expect(await page.locator('main').count()).toBe(1);
       const canonical = await page.locator('link[rel=canonical]').getAttribute('href');
       expect(new URL(canonical!).pathname).toBe(path);
@@ -469,9 +475,10 @@ test('header marks the current page and language alike; links and buttons react 
   await page.goto(site.pathFor(locale, 'home'));
   await dismissConsent(page, site);
   // Current items: foreground colour and a 2px underline; the others stay plain until hover.
+  const multilingual = site.locales.length > 1;
   for (const selector of [
     `.main-nav a[href="${site.pathFor(locale, 'home')}"]`,
-    `.language-nav a[lang="${locale}"]`,
+    ...(multilingual ? [`.language-nav a[lang="${locale}"]`] : []),
   ])
     expect(await decoration(selector), selector).toBe('underline 2px');
   for (const selector of [
@@ -755,7 +762,19 @@ test('a pointer click that leaves focus on the page still hands focus back after
   await expect(trigger).toBeFocused();
 });
 
-test('language links have 24px phone targets and spoken language names', async ({ page, site }) => {
+test('language links have 24px phone targets and spoken language names; one language shows none', async ({
+  page,
+  site,
+}) => {
+  if (site.locales.length === 1) {
+    // Nothing to switch to: no lone language link and no empty language navigation.
+    await page.goto(site.pathFor(homeLocale(site), 'home'));
+    await expect(
+      page.getByRole('navigation', { name: site.messages(homeLocale(site)).navigation.language }),
+    ).toHaveCount(0);
+    await expect(page.locator('[data-locale-link]')).toHaveCount(0);
+    return;
+  }
   for (const width of [320, 375]) {
     await page.setViewportSize({ width, height: 812 });
     await page.goto(contactPath(site, secondLocale(site) ?? homeLocale(site)));
@@ -767,6 +786,121 @@ test('language links have 24px phone targets and spoken language names', async (
       expect(box.height, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
     }
   }
+});
+
+test('every registered page is linked from its navigation, and content pages use the plain layout', async ({
+  page,
+  site,
+}) => {
+  for (const locale of site.locales) {
+    const t = site.messages(locale);
+    await page.goto(site.pathFor(locale, 'home'));
+    const main = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
+    const footer = page.getByRole('contentinfo');
+    for (const { key, nav } of site.pages) {
+      const href = site.pathFor(locale, key);
+      if (nav === 'main') await expect(main.locator(`a[href="${href}"]`)).toHaveCount(1);
+      await expect(footer.locator(`a[href="${href}"]`), `${locale} ${key}`).toHaveCount(1);
+    }
+  }
+  // Owner pages that are not legal text: no table of contents, no last-updated line.
+  const contentPages = site.pages.filter(({ kind }) => (kind as string) === 'content');
+  for (const locale of site.locales)
+    for (const { key } of contentPages) {
+      const t = site.messages(locale);
+      const content = site.pageContent(locale, key as Exclude<typeof key, 'home'>);
+      await page.goto(site.pathFor(locale, key));
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(content.metadata.title);
+      await expect(page.getByRole('navigation', { name: t.legal.tableOfContents })).toHaveCount(0);
+      await expect(page.getByRole('main')).not.toContainText(t.legal.lastUpdated);
+      await expect(page.getByRole('main').locator('time')).toHaveCount(0);
+    }
+  // The template ships legal pages only; the derived fixture adds a content page.
+  test.info().annotations.push({ type: 'content pages', description: String(contentPages.length) });
+});
+
+test('dark tokens match for the system preference and the explicit choice; main text pairs reach 4.5:1', async ({
+  page,
+  site,
+}) => {
+  await page.goto(site.pathFor(homeLocale(site), 'home'));
+  // Every custom property the stylesheets declare on :root, as the page resolves it.
+  const tokens = () =>
+    page.evaluate(() => {
+      const names = new Set<string>();
+      for (const sheet of document.styleSheets)
+        for (const rule of sheet.cssRules) {
+          const rules = rule instanceof CSSMediaRule ? [...rule.cssRules] : [rule];
+          for (const inner of rules)
+            if (inner instanceof CSSStyleRule && inner.selectorText.includes(':root'))
+              for (const name of inner.style) if (name.startsWith('--')) names.add(name);
+        }
+      const style = getComputedStyle(document.documentElement);
+      return Object.fromEntries(
+        [...names].sort().map((name) => [name, style.getPropertyValue(name).trim()]),
+      );
+    });
+  const theme = (value?: string) =>
+    page.evaluate((value) => {
+      if (value) document.documentElement.dataset.theme = value;
+      else delete document.documentElement.dataset.theme;
+    }, value);
+  const themes: Record<string, Record<string, string>> = {};
+  for (const [name, scheme, choice] of [
+    ['light (system)', 'light', undefined],
+    ['light (chosen over a dark system)', 'dark', 'light'],
+    ['dark (system)', 'dark', undefined],
+    ['dark (chosen over a light system)', 'light', 'dark'],
+  ] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await theme(choice);
+    themes[name] = await tokens();
+  }
+  expect(Object.keys(themes['dark (system)']!).length).toBeGreaterThan(5);
+  // The three token blocks must not drift apart: one edited, another forgotten.
+  expect(themes['dark (system)']).toEqual(themes['dark (chosen over a light system)']);
+  expect(themes['light (system)']).toEqual(themes['light (chosen over a dark system)']);
+  expect(themes['dark (system)']).not.toEqual(themes['light (system)']);
+  const ratios = await page.evaluate(
+    (themes) => {
+      const probe = document.createElement('span');
+      document.body.append(probe);
+      const luminance = (color: string) => {
+        probe.style.color = color;
+        const channels = getComputedStyle(probe)
+          .color.match(/[\d.]+/g)!
+          .slice(0, 3)
+          .map((value) => {
+            const channel = Number(value) / 255;
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+        return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+      };
+      const ratio = (a: string, b: string) => {
+        const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+        return (light! + 0.05) / (dark! + 0.05);
+      };
+      const pairs = [
+        ['--on-primary', '--primary'],
+        ['--foreground', '--background'],
+        ['--muted', '--surface'],
+      ];
+      const result = Object.entries(themes).flatMap(([name, tokens]) =>
+        pairs.map(([text, background]) => ({
+          pair: `${name} ${text} on ${background}`,
+          ratio: ratio(tokens[text!]!, tokens[background!]!),
+        })),
+      );
+      probe.remove();
+      return result;
+    },
+    { light: themes['light (system)']!, dark: themes['dark (system)']! },
+  );
+  for (const { pair, ratio } of ratios) expect(ratio, pair).toBeGreaterThanOrEqual(4.5);
+  await test.info().attach('theme-token-contrast', {
+    body: JSON.stringify(ratios, null, 2),
+    contentType: 'application/json',
+  });
 });
 
 test('the theme select shows the current theme and the header brand follows the logo configuration', async ({

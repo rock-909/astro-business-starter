@@ -2,15 +2,18 @@ import {
   boolean,
   discriminatedUnion,
   email,
+  enum as zEnum,
   literal,
   number,
   object,
   prettifyError,
+  record,
   string,
   union,
   type ZodType,
   type output,
 } from 'astro/zod';
+import { locales } from './site-routes.ts';
 
 // 只校验格式：留空即不展示，占位判断只在上线门禁里做。
 const blankOr = (schema: ZodType<string>) => union([schema, literal('')]).optional();
@@ -89,7 +92,8 @@ const siteIdentitySchema = object({
   }),
   readiness: object({
     ownerConfirmedIdentity: boolean(),
-    legalReviewed: object({ en: boolean(), es: boolean() }),
+    // One approval per registered language, no more and no fewer.
+    legalReviewed: record(zEnum(locales), boolean()),
   }).optional(),
 });
 

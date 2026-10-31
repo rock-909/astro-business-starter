@@ -6,6 +6,7 @@ import { ATTRIBUTION_FIELD_NAMES, isClickIdField, pickAttributionFields } from '
 import { parseAllowedHosts } from './inquiry-hosts';
 import { inquiryLeadSchema, type ValidatedInquiry } from './inquiry-schema';
 import { generateLeadReferenceId, splitName } from './lead-utils';
+import { localeTable } from '../site-routes';
 import {
   ipv4ToInteger,
   integerToIpv4,
@@ -235,7 +236,7 @@ async function sendEmail(lead: ValidatedInquiry): Promise<boolean> {
       ['Contact name', lead.fullName],
       ['Email', lead.email],
     ];
-    if (lead.locale) fields.push(['Language', lead.locale === 'es' ? 'Español' : 'English']);
+    if (lead.locale) fields.push(['Language', localeTable[lead.locale].name]);
     if (lead.message) fields.push(['Requirements', lead.message]);
     for (const name of ATTRIBUTION_FIELD_NAMES)
       if (lead[name])

@@ -1,24 +1,21 @@
-/** Site identity and route registry adapted from the owner-provided reference; no supplier facts are invented. */
+/** Site identity, copy and page content, resolved from the registry in `site-routes.ts`. */
 import identity from './site-data.json';
 import { assertValidSiteConfig } from './site-schema';
-import en from './content/en/messages.json';
-import es from './content/es/messages.json';
-import enContact from './content/en/contact';
-import esContact from './content/es/contact';
-import enPrivacy from './content/en/privacy';
-import esPrivacy from './content/es/privacy';
-import enTerms from './content/en/terms';
-import esTerms from './content/es/terms';
+import { locales, pages, localizedPath, type Locale, type PageKey } from './site-routes';
+import type defaultMessages from './content/en/messages.json';
 
-export const locales = ['en', 'es'] as const;
-export type Locale = (typeof locales)[number];
-export const pages = [
-  { key: 'home', path: '/', sitemap: true },
-  { key: 'contact', path: '/contact', sitemap: true },
-  { key: 'privacy', path: '/privacy', sitemap: false },
-  { key: 'terms', path: '/terms', sitemap: false },
-] as const;
-export type PageKey = (typeof pages)[number]['key'];
+export {
+  locales,
+  pages,
+  defaultLocale,
+  localeTable,
+  localeOfPath,
+  localizedPath,
+  unlocalizedPath,
+  type Locale,
+  type PageKey,
+  type PageKind,
+} from './site-routes';
 export interface ContentPage {
   metadata: {
     title: string;
@@ -43,20 +40,38 @@ if (
 )
   throw new Error('PUBLIC_SITE_URL must be an http(s) origin');
 export function pathFor(locale: Locale, page: PageKey): string {
-  const path = pages.find((item) => item.key === page)!.path;
-  return locale === 'en' ? path : `/es${path === '/' ? '' : path}`;
+  return localizedPath(locale, pages.find((item) => item.key === page)!.path);
 }
 export function canonical(locale: Locale, page: PageKey): string {
   return new URL(pathFor(locale, page), site.baseUrl).href;
 }
-export function messages(locale: Locale) {
-  return locale === 'es' ? es : en;
+// Every registered language and page must ship its own copy: a missing file fails the
+// build here instead of falling back to another language or rendering an empty page.
+// The EN messages are the type reference; `npm test` keeps every language's keys equal.
+export type Messages = typeof defaultMessages;
+const messageFiles = import.meta.glob<Messages>('./content/*/messages.json', {
+  eager: true,
+  import: 'default',
+});
+const pageFiles = import.meta.glob<ContentPage>('./content/*/*.ts', {
+  eager: true,
+  import: 'default',
+});
+const missing = locales.flatMap((locale) => [
+  ...(messageFiles[`./content/${locale}/messages.json`]
+    ? []
+    : [`src/content/${locale}/messages.json`]),
+  ...pages
+    .filter((page) => page.key !== 'home' && !pageFiles[`./content/${locale}/${page.key}.ts`])
+    .map((page) => `src/content/${locale}/${page.key}.ts`),
+]);
+if (missing.length)
+  throw new Error(`Registered languages and pages need their content:\n${missing.join('\n')}`);
+export function messages(locale: Locale): Messages {
+  return messageFiles[`./content/${locale}/messages.json`]!;
 }
 export function pageContent(locale: Locale, page: Exclude<PageKey, 'home'>): ContentPage {
-  return {
-    en: { contact: enContact, privacy: enPrivacy, terms: enTerms },
-    es: { contact: esContact, privacy: esPrivacy, terms: esTerms },
-  }[locale][page];
+  return pageFiles[`./content/${locale}/${page}.ts`]!;
 }
 export function shouldIndex(page: PageKey) {
   return (
