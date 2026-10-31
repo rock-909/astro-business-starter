@@ -1,13 +1,14 @@
 {
   "theme": {
-    "switchToLight": "Switch to light theme",
-    "switchToDark": "Switch to dark theme",
-    "switchToSystem": "Switch to system theme"
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
   },
   "accessibility": {
     "skipToContent": "Skip to main content",
     "mainNavigation": "Main navigation",
     "themeSelector": "Theme selector",
+    "opensInNewTab": "opens in a new tab",
     "footerNavigation": "Footer navigation"
   },
   "cookie": {

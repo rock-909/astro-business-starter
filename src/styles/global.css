@@ -112,6 +112,14 @@ button:disabled {
   width: min(1140px, calc(100% - 64px));
   margin-inline: auto;
 }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .skip-link {
   position: fixed;
   z-index: 100;
@@ -542,6 +550,9 @@ textarea[aria-invalid='true'] {
   border-radius: 12px;
   padding: 22px;
   font-size: 13px;
+  /* Short viewports (400% zoom, landscape phones) scroll inside the card instead of cutting it off. */
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
 }
 .cookie-banner h2 {
   font-size: 17px;
@@ -560,11 +571,14 @@ textarea[aria-invalid='true'] {
   flex: 1;
   white-space: nowrap;
 }
+.cookie-actions [aria-expanded='true'] {
+  background: var(--soft);
+  border-color: var(--foreground);
+}
 .cookie-choices {
-  padding: 14px 0;
-  margin-bottom: 14px;
+  padding-top: 14px;
+  margin-top: 14px;
   border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -607,6 +621,11 @@ input[type='checkbox'] {
   .language-nav {
     padding-left: 12px;
     gap: 6px;
+  }
+  /* WCAG 2.2 SC 2.5.8: two-letter links need a 24px-wide target at this spacing. */
+  .language-nav a {
+    min-width: 24px;
+    text-align: center;
   }
   .experiment-strip {
     font-size: 11px;
@@ -656,6 +675,7 @@ input[type='checkbox'] {
     bottom: 12px;
     left: 12px;
     width: calc(100% - 24px);
+    max-height: calc(100dvh - 24px);
   }
   .cookie-actions .button {
     font-size: 12px;

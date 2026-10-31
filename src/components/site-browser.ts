@@ -12,6 +12,8 @@ const gaId = document.body.dataset.gaId || '';
 let gaInitialized = false;
 const globals = window as unknown as Record<string, unknown>;
 let gtag: ((...args: unknown[]) => void) | undefined;
+// The control that reopened the card, so a choice can hand keyboard focus back to it.
+let opener: HTMLElement | null = null;
 
 function signals(consent: Consent) {
   return {
@@ -92,9 +94,18 @@ function choose(consent: Consent) {
     /* The choice still applies to this document. */
   }
   applyConsent(consent);
+  const hadFocus = banner.contains(document.activeElement);
   banner.hidden = true;
+  if (hadFocus && opener?.isConnected) opener.focus();
+  opener = null;
 }
-function reopen() {
+function reopen(trigger?: HTMLElement) {
+  if (trigger) opener = trigger;
+  else if (
+    document.activeElement instanceof HTMLElement &&
+    document.activeElement !== document.body
+  )
+    opener = document.activeElement;
   try {
     localStorage.removeItem('cookie-consent');
   } catch {
@@ -128,9 +139,9 @@ customize.addEventListener('click', () => {
 document.querySelectorAll<HTMLElement>('[data-open-consent]').forEach((button) => {
   // Hidden in the HTML so visitors without JavaScript are not offered a control that does nothing.
   button.hidden = false;
-  button.addEventListener('click', reopen);
+  button.addEventListener('click', () => reopen(button));
 });
-window.addEventListener('cookie-consent:open', reopen);
+window.addEventListener('cookie-consent:open', () => reopen());
 window.addEventListener('storage', (event) => {
   if (event.key === null || event.key === 'cookie-consent') syncConsent();
 });

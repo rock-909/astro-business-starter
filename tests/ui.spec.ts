@@ -98,7 +98,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await page.getByLabel('Full name', { exact: true }).fill('Alex Buyer');
   await page.getByLabel('Email address', { exact: true }).fill('alex+quote@example.test');
   await page.getByLabel(/Message \(optional\)/).fill('Keep this inquiry\nwith its second line.');
-  await page.getByRole('link', { name: 'ES', exact: true }).click();
+  await page.getByRole('link', { name: 'Español', exact: true }).click();
   await expect(page).toHaveURL('/es/contact?utm_source=locale-test#inquiry');
   await expect(page.getByLabel('Nombre completo', { exact: true })).toHaveValue('Alex Buyer');
   await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toHaveValue(
@@ -107,7 +107,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await expect(page.getByLabel(/Mensaje \(opcional\)/)).toHaveValue(
     'Keep this inquiry\nwith its second line.',
   );
-  await page.getByRole('link', { name: 'EN', exact: true }).click();
+  await page.getByRole('link', { name: 'English', exact: true }).click();
   await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Alex Buyer');
 });
 
@@ -442,6 +442,163 @@ test('on a phone, every Tab stop up to the footer stays clear of the open cookie
   }
 });
 
+test('the cookie card stays on screen at 400% zoom and in landscape, scrolling inside itself', async ({
+  page,
+}) => {
+  for (const [width, height] of [
+    [320, 256],
+    [568, 320],
+  ]) {
+    await page.setViewportSize({ width, height });
+    for (const [path, customize, privacy] of [
+      ['/contact', 'Customize', 'Privacy policy'],
+      ['/es/contact', 'Personalizar', 'Política de privacidad'],
+    ] as const) {
+      await page.goto(path);
+      const banner = page.locator('[data-cookie-banner]');
+      await banner.getByRole('button', { name: customize, exact: true }).click();
+      const box = (await banner.boundingBox())!;
+      expect(box.y, `${path} at ${width}x${height} card top`).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(height);
+      // The privacy link a visitor is consenting under can be reached and seen.
+      const link = banner.getByRole('link', { name: privacy, exact: true });
+      await link.focus();
+      const linkBox = (await link.boundingBox())!;
+      expect(linkBox.y, `${path} at ${width}x${height} link`).toBeGreaterThanOrEqual(0);
+      expect(linkBox.y + linkBox.height).toBeLessThanOrEqual(height);
+    }
+  }
+});
+
+test('Customize comes last and Tab moves straight into the options it reveals', async ({
+  page,
+}) => {
+  for (const [path, customize, labels] of [
+    ['/', 'Customize', ['Analytics', 'Advertising', 'Save choices']],
+    ['/es', 'Personalizar', ['Análisis', 'Publicidad', 'Guardar elecciones']],
+  ] as const) {
+    await page.goto(path);
+    const button = page.getByRole('button', { name: customize, exact: true });
+    const collapsed = await button.evaluate((element) => getComputedStyle(element).backgroundColor);
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    // The expanded state is visible, not only announced.
+    expect(await button.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
+      collapsed,
+    );
+    for (const label of labels) {
+      await page.keyboard.press('Tab');
+      expect(
+        await page.evaluate(
+          () => document.activeElement?.closest('label, button')?.textContent?.trim() ?? '',
+        ),
+      ).toBe(label);
+    }
+  }
+});
+
+test('choosing after reopening cookie settings hands focus back to the footer control', async ({
+  page,
+}) => {
+  for (const [path, settings, reject, customize, save] of [
+    ['/privacy', 'Cookie settings', 'Reject all', 'Customize', 'Save choices'],
+    [
+      '/es/privacy',
+      'Configuración de cookies',
+      'Rechazar todo',
+      'Personalizar',
+      'Guardar elecciones',
+    ],
+  ] as const) {
+    await page.goto(path);
+    await dismissConsent(page);
+    const trigger = page.getByRole('button', { name: settings, exact: true });
+    // Once with a quick choice, once through the expanded options.
+    for (const finalChoice of [reject, save]) {
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('button', { name: customize, exact: true })).toBeFocused();
+      if (finalChoice === save) {
+        await page.keyboard.press('Enter');
+        for (let step = 0; step < 3; step++) await page.keyboard.press('Tab');
+      } else {
+        for (let step = 0; step < 2; step++) await page.keyboard.press('Shift+Tab');
+      }
+      await expect(page.getByRole('button', { name: finalChoice, exact: true })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('[data-cookie-banner]')).toBeHidden();
+      await expect(trigger).toBeFocused();
+    }
+  }
+});
+
+test('a pointer click that leaves focus on the page still hands focus back after a keyboard choice', async ({
+  page,
+}) => {
+  await page.goto('/privacy');
+  await dismissConsent(page);
+  const trigger = page.getByRole('button', { name: 'Cookie settings', exact: true });
+  // Safari does not focus a clicked button, so the click arrives while focus is still on body.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await trigger.dispatchEvent('click');
+  await expect(page.getByRole('button', { name: 'Customize', exact: true })).toBeFocused();
+  for (let step = 0; step < 2; step++) await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Reject all', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-cookie-banner]')).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test('language links have 24px phone targets and spoken language names', async ({ page }) => {
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.goto('/es/contact');
+    for (const [name, text] of [
+      ['English', 'EN'],
+      ['Español', 'ES'],
+    ]) {
+      const link = page.getByRole('link', { name, exact: true });
+      await expect(link).toHaveText(text);
+      const box = (await link.boundingBox())!;
+      expect(box.width, `${name} at ${width}px`).toBeGreaterThanOrEqual(24);
+      expect(box.height, `${name} at ${width}px`).toBeGreaterThanOrEqual(24);
+    }
+  }
+});
+
+test('the theme select shows the current theme and the template mark appears without a logo', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await dismissConsent(page);
+  const select = page.getByRole('combobox', { name: 'Theme selector' });
+  await expect(select.locator('option')).toHaveText(['System', 'Light', 'Dark']);
+  await select.selectOption('dark');
+  await expect(select.locator('option:checked')).toHaveText('Dark');
+  await page.goto('/es');
+  const selectEs = page.getByRole('combobox', { name: 'Selector de tema' });
+  await expect(selectEs.locator('option')).toHaveText(['Sistema', 'Claro', 'Oscuro']);
+  await expect(selectEs.locator('option:checked')).toHaveText('Oscuro');
+  // The template ships without a logo, so its own mark stands in next to the site name.
+  await expect(page.locator('.brand .brand-mark')).toBeVisible();
+  await expect(page.locator('.site-header .brand img')).toHaveCount(0);
+});
+
+test('legal pages show the last-updated date in the page language', async ({ page }) => {
+  for (const [path, pattern] of [
+    ['/privacy', /^[A-Z][a-z]+ \d{1,2}, \d{4}$/],
+    ['/terms', /^[A-Z][a-z]+ \d{1,2}, \d{4}$/],
+    ['/es/privacy', /^\d{1,2} de [a-z]+ de \d{4}$/],
+    ['/es/terms', /^\d{1,2} de [a-z]+ de \d{4}$/],
+  ] as const) {
+    await page.goto(path);
+    const time = page.locator('.legal-note time');
+    await expect(time).toHaveText(pattern);
+    await expect(time).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}$/);
+  }
+});
+
 test('keyboard and assistive tech never reach the honeypot field', async ({ page }) => {
   await page.goto('/contact');
   await dismissConsent(page);
@@ -496,7 +653,7 @@ test('session draft survives refresh and a legal-page round trip', async ({ page
   const longestMessage = 'M'.repeat(2000);
   await page.getByLabel(/Message \(optional\)/).fill(longestMessage);
   await page.reload();
-  await page.getByRole('link', { name: 'ES', exact: true }).click();
+  await page.getByRole('link', { name: 'Español', exact: true }).click();
   await expect(page.getByLabel(/Mensaje \(opcional\)/)).toHaveValue(longestMessage);
 });
 
@@ -525,7 +682,7 @@ test('pending submission locks buyer edits and duplicate Enter, then clears only
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
-  await page.getByRole('link', { name: 'ES', exact: true }).click();
+  await page.getByRole('link', { name: 'Español', exact: true }).click();
   await expect(page).toHaveURL('/contact');
   await expect(page.locator('[data-form-status]')).toContainText('Wait for the inquiry result');
   await expect(page.locator('[data-form-status]')).toContainText('INQ-');
@@ -721,7 +878,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   await page.locator('.prose a[href$="#inquiry"]').click();
   await expect(page).toHaveURL('/contact#inquiry');
   await page.evaluate(() => history.replaceState(null, '', '?source=current#inquiry'));
-  await page.getByRole('link', { name: 'ES', exact: true }).click();
+  await page.getByRole('link', { name: 'Español', exact: true }).click();
   await expect(page).toHaveURL('/es/contact?source=current#inquiry');
   await expect(page.getByLabel('Nombre completo', { exact: true })).toHaveValue(
     'Current Location Buyer',
@@ -729,7 +886,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   await expect(page.getByLabel('Dirección de correo electrónico', { exact: true })).toHaveValue(
     'current@example.test',
   );
-  await page.getByRole('link', { name: 'EN', exact: true }).click();
+  await page.getByRole('link', { name: 'English', exact: true }).click();
   await expect(page).toHaveURL('/contact?source=current#inquiry');
 });
 
@@ -839,8 +996,8 @@ test('storage denial keeps unsent details on the current language page', async (
     };
   });
   for (const [path, label, nextLanguage, message] of [
-    ['/contact', 'Full name', 'ES', 'Your browser cannot preserve this draft'],
-    ['/es/contact', 'Nombre completo', 'EN', 'El navegador no permite conservar el borrador'],
+    ['/contact', 'Full name', 'Español', 'Your browser cannot preserve this draft'],
+    ['/es/contact', 'Nombre completo', 'English', 'El navegador no permite conservar el borrador'],
   ]) {
     await page.goto(path!);
     await dismissConsent(page);
@@ -931,7 +1088,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
   await page.evaluate(() =>
     history.replaceState(null, '', '?utm_source=LaterMarker&gclid=LaterClick#inquiry'),
   );
-  await page.getByRole('link', { name: 'ES', exact: true }).click();
+  await page.getByRole('link', { name: 'Español', exact: true }).click();
   await page.reload();
   expect(
     await page.evaluate(() => JSON.parse(sessionStorage.getItem('inquiry_attribution')!)),
@@ -946,7 +1103,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
     .poll(() => page.evaluate(() => sessionStorage.getItem('inquiry_attribution')))
     .toBeNull();
   await page.reload();
-  await page.getByRole('link', { name: 'EN', exact: true }).click();
+  await page.getByRole('link', { name: 'English', exact: true }).click();
   expect(await page.evaluate(() => sessionStorage.getItem('inquiry_attribution'))).toBeNull();
   await page.getByLabel('Full name', { exact: true }).fill('Withdrawn Buyer');
   await page.getByLabel('Email address', { exact: true }).fill('withdrawn@example.test');

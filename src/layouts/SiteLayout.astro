@@ -26,6 +26,11 @@ const fullTitle =
     ? site.seo.defaultTitle
     : site.seo.titleTemplate.replace('%s', title);
 const otherLocale = locale === 'en' ? 'es' : 'en';
+// Brand names for the configured social keys; they are the same in every language.
+const socialNames = { linkedin: 'LinkedIn', twitter: 'X' } satisfies Record<
+  keyof typeof site.social,
+  string
+>;
 const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID || '')
   ? import.meta.env.PUBLIC_GA_MEASUREMENT_ID
   : '';
@@ -93,12 +98,6 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
     <header class="site-header">
       <div class="wrap header-row">
         <a class="brand" href={pathFor(locale, 'home')}>
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M3 4h18v12H10l-5 4v-4H3z" stroke="currentColor" stroke-width="1.6" />
-              <path d="M7 8h10M7 12h6" stroke="currentColor" stroke-width="1.5" />
-            </svg>
-          </span>
           {site.brandAssets.logo?.status === 'ready' ? (
             <img
               src={site.brandAssets.logo.horizontal}
@@ -107,7 +106,16 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
               alt={site.name}
             />
           ) : (
-            <span>{site.name}</span>
+            <>
+              {/* The template mark stands in only until a derived site configures its own logo. */}
+              <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M3 4h18v12H10l-5 4v-4H3z" stroke="currentColor" stroke-width="1.6" />
+                  <path d="M7 8h10M7 12h6" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+              </span>
+              <span>{site.name}</span>
+            </>
           )}
         </a>
         <nav class="main-nav" aria-label={t.accessibility.mainNavigation}>
@@ -138,6 +146,7 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
               lang={language}
               hreflang={language}
               aria-current={language === locale ? 'page' : undefined}
+              aria-label={language === 'en' ? 'English' : 'Español'}
             >
               {language === 'en' ? 'EN' : 'ES'}
             </a>
@@ -177,7 +186,9 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
                 .filter(([, href]) => href)
                 .map(([name, href]) => (
                   <a href={href} target="_blank" rel="noopener noreferrer">
-                    {name} ↗
+                    {socialNames[name as keyof typeof socialNames]}{' '}
+                    <span aria-hidden="true">↗</span>
+                    <span class="visually-hidden">({t.accessibility.opensInNewTab})</span>
                   </a>
                 ))}
             </div>
@@ -197,9 +208,9 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
               hidden
               aria-label={t.accessibility.themeSelector}
             >
-              <option value="system">{t.theme.switchToSystem}</option>
-              <option value="light">{t.theme.switchToLight}</option>
-              <option value="dark">{t.theme.switchToDark}</option>
+              <option value="system">{t.theme.system}</option>
+              <option value="light">{t.theme.light}</option>
+              <option value="dark">{t.theme.dark}</option>
             </select>
           </div>
         </div>
@@ -210,6 +221,23 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
       <p>
         {t.cookie.description} <a href={pathFor(locale, 'privacy')}>{t.cookie.learnMore}</a>
       </p>
+      <div class="cookie-actions">
+        <button type="button" class="button secondary small" data-consent-reject>
+          {t.cookie.rejectAll}
+        </button>
+        <button type="button" class="button secondary small" data-consent-accept>
+          {t.cookie.acceptAll}
+        </button>
+        <button
+          type="button"
+          class="button secondary small"
+          data-consent-customize
+          aria-expanded="false"
+          aria-controls="cookie-category-choices"
+        >
+          {t.cookie.customize}
+        </button>
+      </div>
       <div class="cookie-choices" id="cookie-category-choices" hidden>
         <label>
           <input type="checkbox" name="analytics" data-consent-analytics />
@@ -221,23 +249,6 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
         </label>
         <button type="button" class="button secondary small" data-consent-save>
           {t.cookie.saveChoices}
-        </button>
-      </div>
-      <div class="cookie-actions">
-        <button
-          type="button"
-          class="button secondary small"
-          data-consent-customize
-          aria-expanded="false"
-          aria-controls="cookie-category-choices"
-        >
-          {t.cookie.customize}
-        </button>
-        <button type="button" class="button secondary small" data-consent-reject>
-          {t.cookie.rejectAll}
-        </button>
-        <button type="button" class="button secondary small" data-consent-accept>
-          {t.cookie.acceptAll}
         </button>
       </div>
     </section>
