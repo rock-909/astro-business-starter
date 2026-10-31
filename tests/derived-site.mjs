@@ -91,12 +91,10 @@ const aboutPage = {
     },
     faq: [
       {
-        id: 'lead-time',
         question: 'How long does an order take?',
         answer: 'Stock sizes ship in five working days.\nMade-to-order valves take six weeks.',
       },
       {
-        id: 'certification',
         question: 'Are the valves certified for drinking water?',
         answer: 'Yes, every valve carries WRAS approval.',
       },

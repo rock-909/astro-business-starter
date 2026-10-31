@@ -761,7 +761,7 @@ test('readiness also reads the visible description and FAQ of owner pages', () =
           description: starter,
           updatedAt: '2026-10-25',
           seo: { title: 'Contact', description: launchCopy },
-          faq: [{ id: 'reply', question: 'When do you reply?', answer: starter }],
+          faq: [{ question: 'When do you reply?', answer: starter }],
         },
         content: launchCopy,
       })};`,
@@ -778,7 +778,7 @@ test('readiness also reads the visible description and FAQ of owner pages', () =
   }
 });
 
-test('the build refuses a page FAQ with an empty answer, a malformed id or a repeated id', async () => {
+test('the build refuses a page FAQ with an empty answer or that is not a list', async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'astro-faq-'));
   try {
     cpSync(resolve('src'), join(fixture, 'src'), { recursive: true });
@@ -796,14 +796,13 @@ test('the build refuses a page FAQ with an empty answer, a malformed id or a rep
           content: 'Text',
         })};`,
       );
-    const valid = { id: 'reply', question: 'When do you reply?', answer: 'Within a day.' };
+    const valid = { question: 'When do you reply?', answer: 'Within a day.' };
     page([valid]);
     const loaded = await loadSite(fixture);
     assert.deepEqual(loaded.pageContent(locales[0], 'contact').metadata.faq, [valid]);
     for (const [faq, problem] of [
       [[{ ...valid, answer: ' ' }], /metadata\.faq\[0\]\.answer must be non-empty text/],
-      [[{ ...valid, id: 'When?' }], /metadata\.faq\[0\]\.id must be lowercase/],
-      [[valid, { ...valid, question: 'Again?' }], /metadata\.faq id "reply" is repeated/],
+      [[{ ...valid, question: undefined }], /metadata\.faq\[0\]\.question must be non-empty text/],
       [{ reply: valid }, /metadata\.faq must be a list/],
     ]) {
       page(faq);

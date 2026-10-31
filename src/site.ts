@@ -17,8 +17,6 @@ export {
   type PageKind,
 } from './site-routes';
 export interface FaqItem {
-  /** Stable anchor-safe key, unique within the page. */
-  id: string;
   question: string;
   answer: string;
 }
@@ -83,20 +81,11 @@ const faqProblems = Object.entries(pageFiles).flatMap(([file, page]) => {
   const faq: unknown = page.metadata.faq;
   if (faq === undefined) return [];
   if (!Array.isArray(faq)) return [`${file}: metadata.faq must be a list`];
-  const ids = new Set<string>();
-  return faq.flatMap((item: Partial<Record<keyof FaqItem, unknown>>, index) => {
-    const text = (key: keyof FaqItem) =>
-      typeof item?.[key] === 'string' && (item[key] as string).trim() !== '';
-    const problems = (['question', 'answer'] as const)
-      .filter((key) => !text(key))
-      .map((key) => `${file}: metadata.faq[${index}].${key} must be non-empty text`);
-    if (!text('id') || !/^[a-z0-9-]+$/.test(item.id as string))
-      problems.push(`${file}: metadata.faq[${index}].id must be lowercase letters, digits or -`);
-    else if (ids.has(item.id as string))
-      problems.push(`${file}: metadata.faq id "${item.id}" is repeated`);
-    else ids.add(item.id as string);
-    return problems;
-  });
+  return faq.flatMap((item: Partial<Record<keyof FaqItem, unknown>>, index) =>
+    (['question', 'answer'] as const)
+      .filter((key) => typeof item?.[key] !== 'string' || (item[key] as string).trim() === '')
+      .map((key) => `${file}: metadata.faq[${index}].${key} must be non-empty text`),
+  );
 });
 if (faqProblems.length) throw new Error(`Invalid page FAQ:\n${faqProblems.join('\n')}`);
 export function messages(locale: Locale): Messages {

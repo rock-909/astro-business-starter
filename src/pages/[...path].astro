@@ -63,7 +63,7 @@ const hasContactMethods = Boolean(
             <p class="page-description">{content!.metadata.description}</p>
           )}
         </header>
-        <StaticContent content={content!.content} locale={locale} showToc={kind === 'legal'} />
+        <StaticContent content={content!.content} locale={locale} showToc={kind !== 'contact'} />
         <FaqSection items={content!.metadata.faq} locale={locale} />
         {kind === 'contact' && hasContactMethods && (
           <section class="contact-methods" aria-labelledby="contact-methods">

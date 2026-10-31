@@ -972,7 +972,7 @@ test('language links have 24px phone targets and spoken language names; one lang
   }
 });
 
-test('every registered page is linked from its navigation, and content pages use the plain layout', async ({
+test('every registered page is linked from its navigation, and content pages get the page shell', async ({
   page,
   site,
 }) => {
@@ -990,15 +990,19 @@ test('every registered page is linked from its navigation, and content pages use
       await expect(footer.locator(`a[href="${href}"]`), where).toHaveCount(nav ? 1 : 0);
     }
   }
-  // Owner pages that are not legal text: no table of contents, no last-updated line.
+  // Owner pages that are not legal text: a contents card when they have sections, no
+  // last-updated line.
   const contentPages = site.pages.filter(({ kind }) => (kind as string) === 'content');
   for (const locale of site.locales)
     for (const { key } of contentPages) {
       const t = site.messages(locale);
       const content = site.pageContent(locale, key as Exclude<typeof key, 'home'>);
+      const sections = [...content.content.matchAll(/^## (.+)$/gm)].length;
       await page.goto(site.pathFor(locale, key));
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(content.metadata.title);
-      await expect(page.getByRole('navigation', { name: t.legal.tableOfContents })).toHaveCount(0);
+      await expect(
+        page.getByRole('navigation', { name: t.legal.tableOfContents }).getByRole('link'),
+      ).toHaveCount(sections);
       await expect(page.getByRole('main').locator('time')).toHaveCount(0);
     }
   // The template ships legal pages only; the derived fixture adds a content page.
@@ -1127,7 +1131,7 @@ test('the theme select shows the current theme and the header brand follows the 
   }
 });
 
-test('page shells put the description under the title, show no date, and give legal sections a contents card', async ({
+test('page shells put the description under the title, show no date, and give content and legal sections a contents card', async ({
   page,
   site,
 }) => {
@@ -1155,7 +1159,7 @@ test('page shells put the description under the title, show no date, and give le
         // One 720px column (24px gutters), the contact page widening for its form.
         const column = await main.locator('.page-narrow').boundingBox();
         expect(column!.width).toBeLessThanOrEqual(kind === 'contact' && width >= 1024 ? 1080 : 720);
-        if (kind !== 'legal' || sections === 0) {
+        if (kind === 'contact' || sections === 0) {
           await expect(toc).toHaveCount(0);
           continue;
         }

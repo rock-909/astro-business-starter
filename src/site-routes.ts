@@ -17,8 +17,8 @@ export const locales = Object.keys(localeTable) as [Locale, ...Locale[]];
 export const defaultLocale = locales[0];
 
 export type PageKind = 'home' | 'contact' | 'legal' | 'content';
-// `kind` picks the layout: `legal` pages get a table of contents beside the text,
-// `content` pages are plain owner copy. `nav` places the link in the header and footer
+// `kind` picks the layout: `legal` and `content` pages get a table of contents beside
+// the text when they have sections (h2), `contact` pages put the form beside it. `nav` places the link in the header and footer
 // `main` column or the footer `support` column. Non-home pages read
 // `src/content/<locale>/<key>.ts`.
 export const pages = [
