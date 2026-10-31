@@ -3,6 +3,7 @@ import type { ContentPage } from '../../site';
 const termsPage = {
   metadata: {
     title: 'Terms — to be completed',
+    description: 'Incomplete placeholder. The site operator must replace this before launch.',
     updatedAt: '2026-08-06',
     seo: {
       title: 'Terms — to be completed',

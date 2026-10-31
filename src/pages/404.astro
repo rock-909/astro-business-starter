@@ -13,10 +13,12 @@ const t = messages(locale);
   description={t.errors.notFound.description}
   notFound
 >
-  <section class="wrap not-found">
+  <section class="not-found">
     <p class="not-found-code">404</p>
-    <h1>{t.errors.notFound.title}</h1>
-    <p class="prose">{t.errors.notFound.description}</p>
+    <div class="not-found-text">
+      <h1>{t.errors.notFound.title}</h1>
+      <p>{t.errors.notFound.description}</p>
+    </div>
     <div class="not-found-actions">
       <a class="button" href={pathFor(locale, 'home')}>
         {t.errors.notFound.goHome}

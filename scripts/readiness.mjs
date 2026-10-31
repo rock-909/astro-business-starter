@@ -39,8 +39,8 @@ const mailbox = (value) =>
 // Starter wording that must not reach an indexable derived site (EN and ES).
 export const templateCopy =
   /astro business starter|non-production|inquiry site|sitio de consultas|\ben \/ es\b|no destinado a producción|sentinel|reference (?:site|contact page)|site reference|(?:sitio|página)(?: de contacto)? de referencia|starting point|punto de partida|should replace|debe sustituir|must be replaced|not ready to receive|no está listo para recibir/i;
-// Only rendered in states readiness already blocks: experiment builds and a blank mailbox.
-export const templateOnlyKeys = /^(?:experiment\.|contact\.panel\.unconfiguredMailbox$)/;
+// Only rendered in a state readiness already blocks: experiment builds.
+export const templateOnlyKeys = /^experiment\./;
 // SHA-256 of the starter share images (PNG and its SVG source), whose artwork reads
 // "Non-production reference site"; a derived site must ship its own.
 export const templateShareImages = new Set([

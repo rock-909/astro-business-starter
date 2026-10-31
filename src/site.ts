@@ -16,11 +16,19 @@ export {
   type PageKey,
   type PageKind,
 } from './site-routes';
+export interface FaqItem {
+  question: string;
+  answer: string;
+}
 export interface ContentPage {
   metadata: {
     title: string;
+    /** One visible sentence under the page title. */
+    description?: string;
     updatedAt: string;
     seo: { title: string; description: string };
+    /** Shown as plain questions and answers after the body, and as FAQPage structured data. */
+    faq?: FaqItem[];
   };
   content: string;
 }
@@ -67,6 +75,19 @@ const missing = locales.flatMap((locale) => [
 ]);
 if (missing.length)
   throw new Error(`Registered languages and pages need their content:\n${missing.join('\n')}`);
+// Page modules written as plain JSON skip the type check, so the FAQ shape is checked here:
+// an empty question or answer would publish an empty structured-data entry.
+const faqProblems = Object.entries(pageFiles).flatMap(([file, page]) => {
+  const faq: unknown = page.metadata.faq;
+  if (faq === undefined) return [];
+  if (!Array.isArray(faq)) return [`${file}: metadata.faq must be a list`];
+  return faq.flatMap((item: Partial<Record<keyof FaqItem, unknown>>, index) =>
+    (['question', 'answer'] as const)
+      .filter((key) => typeof item?.[key] !== 'string' || (item[key] as string).trim() === '')
+      .map((key) => `${file}: metadata.faq[${index}].${key} must be non-empty text`),
+  );
+});
+if (faqProblems.length) throw new Error(`Invalid page FAQ:\n${faqProblems.join('\n')}`);
 export function messages(locale: Locale): Messages {
   return messageFiles[`./content/${locale}/messages.json`]!;
 }
@@ -83,6 +104,7 @@ export function jsonLd(locale: Locale, page: PageKey, title: string, description
   const company = site.company;
   const orgId = `${site.baseUrl}#organization`;
   const websiteId = `${site.baseUrl}#website`;
+  const faq = page === 'home' ? undefined : pageContent(locale, page).metadata.faq;
   const organization = company?.name?.trim()
     ? {
         '@type': 'Organization',
@@ -137,6 +159,21 @@ export function jsonLd(locale: Locale, page: PageKey, title: string, description
               isPartOf: { '@id': websiteId },
               ...(organization ? { about: { '@id': orgId } } : {}),
             },
+            ...(faq?.length
+              ? [
+                  {
+                    '@type': 'FAQPage',
+                    '@id': `${canonical(locale, page)}#faq`,
+                    url: canonical(locale, page),
+                    inLanguage: locale,
+                    mainEntity: faq.map((item) => ({
+                      '@type': 'Question',
+                      name: item.question,
+                      acceptedAnswer: { '@type': 'Answer', text: item.answer },
+                    })),
+                  },
+                ]
+              : []),
           ]
         : []),
     ],

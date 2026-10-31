@@ -37,7 +37,7 @@
   },
   "legal": {
     "tableOfContents": "Table of Contents",
-    "lastUpdated": "Last updated"
+    "faq": "Frequently asked questions"
   },
   "navigation": {
     "home": "Home",
@@ -68,14 +68,11 @@
     },
     "title": "Inquiry site",
     "description": "A starting point for a business website. Visit the contact page to prepare an inquiry.",
-    "contactLink": "Contact",
-    "ruleLabel": "EN / ES"
+    "contactLink": "Contact"
   },
   "contact": {
     "panel": {
-      "intro": "You can also contact us directly.",
-      "contactTitle": "Email & inquiry",
-      "unconfiguredMailbox": "No business mailbox has been configured for this reference site."
+      "contactTitle": "Email & inquiry"
     }
   },
   "inquiry": {
@@ -124,7 +121,6 @@
         "rateLimitSummary": "Too many attempts. Wait about a minute, then send your inquiry again.",
         "rateLimitReady": "You can send your inquiry again now."
       },
-      "title": "Start an inquiry",
       "website": "Website",
       "unknown": "We could not confirm the result. Your inquiry may have been received. Your details are kept below; retrying may create a duplicate. You can retry with a new verification, or if you don't hear back, email us at the address on this page.",
       "localePending": "Wait for the inquiry result before switching language.",

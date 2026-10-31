@@ -337,14 +337,12 @@ test('readiness rejects template copy wherever it renders and accepts owner-rewr
       const file = join(fixture, `src/content/${locale}/messages.json`);
       const messages = JSON.parse(readFileSync(file, 'utf8'));
       messages.home.title = starterTitle[locale] ?? starterTitle.en;
-      messages.home.ruleLabel = 'EN / ES';
       messages.home.description = starter;
       messages.home.metadata.description = starter;
       messages['structured-data'].website.description = starter;
       messages.navigation.siteDescription = starter;
       // Only rendered in states readiness already blocks, or not template copy at all.
       messages.experiment.label = starter;
-      messages.contact.panel.unconfiguredMailbox = starter;
       messages.inquiry.form.referenceLabel = 'Reference';
       writeFileSync(file, JSON.stringify(messages));
       writePage(fixture, locale, 'contact', starter, '', starter);
@@ -358,7 +356,6 @@ test('readiness rejects template copy wherever it renders and accepts owner-rewr
         issues.toSorted(),
         [
           `${locale}/messages home.title still contains template copy`,
-          `${locale}/messages home.ruleLabel still contains template copy`,
           `${locale}/messages home.description still contains template copy`,
           `${locale}/messages home.metadata.description still contains template copy`,
           `${locale}/messages structured-data.website.description still contains template copy`,
@@ -748,6 +745,71 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
         rmSync(fixture, { recursive: true, force: true });
       }
     });
+  }
+});
+
+test('readiness also reads the visible description and FAQ of owner pages', () => {
+  const fixture = launchFixture();
+  const starter = 'A non-production inquiry reference site that must be replaced before launch.';
+  try {
+    const [locale] = contentLocales(fixture);
+    writeFileSync(
+      join(fixture, `src/content/${locale}/contact.ts`),
+      `export default ${JSON.stringify({
+        metadata: {
+          title: 'Contact',
+          description: starter,
+          updatedAt: '2026-10-25',
+          seo: { title: 'Contact', description: launchCopy },
+          faq: [{ question: 'When do you reply?', answer: starter }],
+        },
+        content: launchCopy,
+      })};`,
+    );
+    assert.deepEqual(
+      readinessIssues(productionPrerequisites, launchIdentity, pathToFileURL(`${fixture}/`)),
+      [
+        `${locale}/contact metadata.description still contains template copy`,
+        `${locale}/contact metadata.faq.0.answer still contains template copy`,
+      ],
+    );
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test('the build refuses a page FAQ with an empty answer or that is not a list', async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'astro-faq-'));
+  try {
+    cpSync(resolve('src'), join(fixture, 'src'), { recursive: true });
+    symlinkSync(resolve('node_modules'), join(fixture, 'node_modules'), 'dir');
+    const page = (faq) =>
+      writeFileSync(
+        join(fixture, `src/content/${locales[0]}/contact.ts`),
+        `export default ${JSON.stringify({
+          metadata: {
+            title: 'Contact',
+            updatedAt: '2026-10-25',
+            seo: { title: 'C', description: 'C' },
+            faq,
+          },
+          content: 'Text',
+        })};`,
+      );
+    const valid = { question: 'When do you reply?', answer: 'Within a day.' };
+    page([valid]);
+    const loaded = await loadSite(fixture);
+    assert.deepEqual(loaded.pageContent(locales[0], 'contact').metadata.faq, [valid]);
+    for (const [faq, problem] of [
+      [[{ ...valid, answer: ' ' }], /metadata\.faq\[0\]\.answer must be non-empty text/],
+      [[{ ...valid, question: undefined }], /metadata\.faq\[0\]\.question must be non-empty text/],
+      [{ reply: valid }, /metadata\.faq must be a list/],
+    ]) {
+      page(faq);
+      await assert.rejects(loadSite(fixture), problem);
+    }
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
   }
 });
 

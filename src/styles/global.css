@@ -390,15 +390,6 @@ a.brand:is(:hover, :active) {
 .language-nav a {
   padding: 8px 0;
 }
-.experiment-strip {
-  font-size: 12px;
-  color: var(--muted-foreground);
-  padding: 12px 0;
-  letter-spacing: 0.02em;
-}
-.experiment-strip strong {
-  font-weight: 600;
-}
 h1,
 h2,
 h3,
@@ -442,19 +433,6 @@ p {
 }
 .muted {
   color: var(--muted-foreground);
-}
-.hero {
-  padding: 70px 0 100px;
-  position: relative;
-}
-.hero-copy {
-  max-width: 620px;
-  font-size: 16px;
-  line-height: 1.625;
-  color: var(--muted-foreground);
-}
-.hero .button {
-  margin-top: 16px;
 }
 /* Buttons: primary (brand), outline and ghost; default 40px and small 32px. */
 .button {
@@ -502,186 +480,6 @@ p {
 .button.small {
   height: var(--button-height-sm);
   padding: 0 12px;
-}
-.hero-rule {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  padding-top: 44px;
-  margin-top: 78px;
-  border-top: 1px solid var(--border);
-  max-width: 850px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-.hero-rule span {
-  max-width: 530px;
-}
-.hero-rule strong {
-  color: var(--foreground);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  font-weight: 550;
-}
-.page-head {
-  padding: 50px 0 42px;
-  max-width: 850px;
-}
-.page-head .prose {
-  max-width: 750px;
-}
-.prose {
-  font-size: 16px;
-  line-height: 1.75;
-  color: var(--muted-foreground);
-  overflow-wrap: anywhere;
-}
-.prose p:last-child {
-  margin-bottom: 0;
-}
-.contact-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: 72px;
-  padding: 0 0 80px;
-  align-items: start;
-}
-.contact-aside {
-  /* The form comes first in the DOM (phone reading and Tab order); wide screens show this column on the left. */
-  order: -1;
-  border-top: 1px solid var(--border);
-  padding-top: 28px;
-}
-.contact-aside p {
-  font-size: 15px;
-  color: var(--muted-foreground);
-  max-width: 340px;
-}
-.contact-methods {
-  margin: 32px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.contact-methods a,
-.fallback a {
-  overflow-wrap: anywhere;
-}
-.contact-methods address {
-  font-style: normal;
-}
-.inquiry-card {
-  border: 1px solid var(--border);
-  border-radius: var(--card-radius);
-  background: var(--card);
-  color: var(--card-foreground);
-  padding: 32px;
-  scroll-margin-top: 24px;
-}
-.inquiry-card h2 {
-  margin-bottom: 28px;
-}
-.field {
-  margin-bottom: 22px;
-}
-.field label {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-.optional {
-  font-weight: 400;
-  color: var(--muted-foreground);
-}
-input:not([type='checkbox']),
-textarea,
-select {
-  width: 100%;
-  border: 1px solid var(--input);
-  background: var(--background);
-  color: var(--foreground);
-  border-radius: 6px;
-  padding: 12px 14px;
-  min-height: 48px;
-}
-textarea {
-  resize: vertical;
-  min-height: 138px;
-}
-input[aria-invalid='true'],
-textarea[aria-invalid='true'] {
-  border-color: var(--error);
-}
-.field-hint {
-  font-size: 13px;
-  margin: 7px 0 0;
-  color: var(--muted-foreground);
-}
-.field-error {
-  font-size: 13px;
-  color: var(--error-foreground);
-  margin: 7px 0 0;
-}
-.honeypot {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-.privacy-notice {
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--muted-foreground);
-  margin-top: 18px;
-  margin-bottom: 0;
-}
-.form-status:not(:empty) {
-  padding: 16px;
-  border: 1px solid var(--border);
-  background: var(--muted);
-  border-radius: var(--control-radius);
-  margin: 20px 0;
-  overflow-wrap: anywhere;
-}
-.form-status[data-state] {
-  border-left: 3px solid var(--primary);
-}
-.form-status[data-state='error'] {
-  color: var(--error-foreground);
-  border-left-color: var(--error);
-}
-.verification {
-  font-size: 13px;
-  color: var(--muted-foreground);
-  margin: 20px 0;
-  min-height: 32px;
-}
-.verification p {
-  margin: 0;
-}
-.fallback {
-  font-size: 14px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
-  margin: 18px 0;
-  background: var(--muted);
-}
-.legal-page,
-.content-page {
-  max-width: 850px;
-  padding: 50px 0 90px;
-}
-.legal-note {
-  font-size: 13px;
-  color: var(--muted-foreground);
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
 }
 .site-footer {
   border-top: 1px solid var(--border);
@@ -810,19 +608,443 @@ input[type='checkbox'] {
   height: 18px;
   accent-color: var(--foreground);
 }
+/* Non-production notice: the reference site's warning tones, full width under the header. */
+.experiment-strip {
+  background: var(--warning-muted);
+  color: var(--warning-foreground);
+  border-bottom: 1px solid var(--warning-border);
+  font-size: 12px;
+  line-height: 16px;
+}
+.experiment-strip p {
+  margin-block: 0;
+  padding-block: 8px;
+}
+.experiment-strip strong {
+  font-weight: 600;
+}
+/* Page shells from the reference site: one 720px column (24px gutters); the contact page
+   widens to 1080px from 1024px with the text in columns 1-6 and the form in 8-12. */
+.page-narrow {
+  max-width: 720px;
+  margin-inline: auto;
+  padding: 32px 24px;
+}
+.page-narrow h1 {
+  margin-bottom: 16px;
+  text-wrap: balance;
+}
+.page-description {
+  max-width: 672px;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.625;
+  color: var(--muted-foreground);
+  text-wrap: pretty;
+}
+.page-header {
+  margin-bottom: 24px;
+}
+.home {
+  padding-block: 48px;
+}
+.home-contact {
+  display: inline-block;
+  margin-top: 24px;
+  padding-block: 8px;
+}
+.page-main,
+.page-aside {
+  min-width: 0;
+}
+.page-aside {
+  margin-top: 40px;
+}
+@media (min-width: 768px) {
+  .page-narrow {
+    padding-block: 48px;
+  }
+  .home {
+    padding-block: 64px;
+  }
+  .page-header {
+    margin-bottom: 32px;
+  }
+}
+@media (min-width: 1024px) {
+  .page-split {
+    max-width: 1080px;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: 24px;
+    align-items: start;
+  }
+  .page-split .page-main {
+    grid-column: span 6;
+  }
+  .page-split .page-aside {
+    grid-column: 8 / span 5;
+    margin-top: 0;
+  }
+}
+/* Body copy: 16px grey paragraphs at 72ch, foreground headings and emphasis. */
+.prose {
+  font-size: 16px;
+  line-height: 28px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.prose :is(p, ul, ol) {
+  max-width: 72ch;
+  margin: 12px 0 0;
+  text-wrap: pretty;
+}
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose :is(ul, ol) {
+  padding: 0;
+  list-style-position: inside;
+}
+.prose li + li {
+  margin-top: 4px;
+}
+.prose h2 {
+  margin: 40px 0 0;
+}
+.prose h3 {
+  margin: 24px 0 0;
+  font-size: 18px;
+  line-height: 28px;
+}
+.prose h2,
+.prose h3 {
+  color: var(--foreground);
+  scroll-margin-top: 96px;
+}
+.prose strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.content-table {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+.content-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+  line-height: 20px;
+}
+.content-table th,
+.content-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.content-table th {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.content-table tr:last-child td {
+  border-bottom: 0;
+}
+/* Legal contents card: above the text on narrow screens, beside it from 1024px. */
+.static-content.has-toc {
+  display: grid;
+  gap: 40px;
+}
+.content-toc {
+  align-self: start;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--card);
+  color: var(--card-foreground);
+  font-size: 14px;
+}
+.content-toc h2 {
+  margin: 0 0 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+.content-toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.content-toc li + li {
+  margin-top: 8px;
+}
+.content-toc a {
+  display: inline-flex;
+  border-radius: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.content-toc a:is(:hover, :active) {
+  color: var(--foreground);
+}
+@media (min-width: 640px) {
+  .content-toc a {
+    font-size: 14px;
+    line-height: 20px;
+  }
+}
+@media (min-width: 1024px) {
+  .static-content.has-toc {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1.2fr);
+  }
+  .static-content.has-toc .content-toc {
+    order: 1;
+  }
+}
+/* Page FAQ: every answer visible, no accordion. */
+.page-faq {
+  margin-top: 48px;
+}
+.page-faq h2 {
+  margin: 0;
+  scroll-margin-top: 96px;
+}
+.page-faq h3 {
+  margin: 24px 0 0;
+  font-size: 18px;
+  line-height: 28px;
+}
+.page-faq p {
+  max-width: 72ch;
+  margin: 8px 0 0;
+  font-size: 16px;
+  line-height: 28px;
+  color: var(--muted-foreground);
+  white-space: pre-line;
+}
+@media (min-width: 768px) {
+  .page-faq h2 {
+    font-size: 28px;
+  }
+}
+/* Contact details: a small heading and the configured links, nothing else. */
+.contact-methods {
+  margin-top: 24px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.contact-methods h2 {
+  margin: 0 0 12px;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+.contact-methods :is(a, address) {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  padding-block: 8px;
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+/* Inquiry form: no card or title; 14px labels, 40px fields with 8px corners, 32px rhythm. */
+.inquiry {
+  scroll-margin-top: 96px;
+}
+[data-inquiry-form] > * + * {
+  margin-top: 32px;
+}
+/* Empty live regions keep their place in the DOM without adding a gap. */
+[data-inquiry-form] > .form-status:empty {
+  margin-top: 0;
+}
+.field-pair {
+  display: grid;
+  gap: 32px 16px;
+}
+/* Name and email sit side by side in the single-column tablet page only. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .field-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.field {
+  min-width: 0;
+}
+.field label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--foreground);
+}
+.optional {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+input:not([type='checkbox']),
+textarea,
+select {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 12px;
+  border: 1px solid var(--input);
+  border-radius: var(--control-radius);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 14px;
+}
+textarea {
+  display: block;
+  height: auto;
+  padding-block: 8px;
+  line-height: 24px;
+  resize: vertical;
+}
+input[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: var(--error);
+}
+.field-hint,
+.field-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+}
+.field-hint {
+  color: var(--muted-foreground);
+}
+.field-error {
+  color: var(--error-foreground);
+}
+.honeypot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* Nothing to show (no widget slot content, no note): no gap either. */
+[data-inquiry-form] > .verification:has([data-turnstile]:empty):has(p:empty) {
+  margin-top: 0;
+}
+.verification p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.verification p:not(:empty) {
+  margin-top: 8px;
+}
+.verification p:first-child:not(:empty),
+.verification [data-turnstile]:empty + p {
+  margin-top: 0;
+}
+.verification p[data-tone='error'] {
+  color: var(--error-foreground);
+}
+.verification p[data-tone='warning'] {
+  color: var(--warning-foreground);
+}
+/* Status callouts in four tones; the Done:/Error: prefix keeps the outcome readable without colour. */
+.form-status:not(:empty) {
+  padding: 16px;
+  border: 1px solid var(--info-border);
+  border-radius: var(--control-radius);
+  background: var(--info-muted);
+  color: var(--info-foreground);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.form-status strong {
+  font-weight: 500;
+}
+.form-status[data-state='success'] {
+  border-color: var(--success-border);
+  background: var(--success-muted);
+  color: var(--success-foreground);
+}
+.form-status[data-state='warning'] {
+  border-color: var(--warning-border);
+  background: var(--warning-muted);
+  color: var(--warning-foreground);
+}
+.form-status[data-state='error'] {
+  border-color: var(--error-border);
+  background: var(--error-muted);
+  color: var(--error-foreground);
+}
+/* The status box takes focus to be read out; its tone border already frames it. */
+.form-status:focus-visible {
+  outline: none;
+}
+[data-inquiry-form] > .privacy-notice {
+  margin: 20px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+/* No-JS and mailbox notes: quiet cards like the reference site's static fallback. */
+.fallback {
+  margin: 0 0 24px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 24px;
+}
+.inquiry > .fallback {
+  margin: 24px 0 0;
+}
+.fallback a {
+  overflow-wrap: anywhere;
+}
+/* 404: centred, a large grey code, a 24px title and the recovery buttons. */
 .not-found {
-  padding: 70px 0 110px;
-  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: 60vh;
+  max-width: 544px;
+  margin-inline: auto;
+  padding: 64px 16px;
+  text-align: center;
 }
 .not-found-code {
+  margin: 0;
   font-size: 60px;
   line-height: 1;
   font-weight: 700;
   color: var(--muted-foreground);
 }
+.not-found-text h1 {
+  margin: 0 0 12px;
+  font-size: 24px;
+  line-height: 32px;
+}
+.not-found-text p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.625;
+  color: var(--muted-foreground);
+}
 .not-found-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
 }
 @media (max-width: 760px) {
@@ -853,34 +1075,6 @@ input[type='checkbox'] {
     min-width: 24px;
     text-align: center;
   }
-  .experiment-strip {
-    font-size: 11px;
-  }
-  .hero {
-    padding: 48px 0 62px;
-  }
-  .hero-rule {
-    margin-top: 52px;
-    flex-direction: column;
-    gap: 14px;
-    padding-top: 26px;
-  }
-  .contact-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 28px;
-  }
-  .contact-aside {
-    order: 0;
-  }
-  .inquiry-card {
-    padding: 24px;
-  }
-  .page-head {
-    padding-top: 36px;
-  }
-  .prose {
-    font-size: 16px;
-  }
   .footer-top {
     grid-template-columns: 1fr 1fr;
     gap: 24px;
@@ -908,10 +1102,6 @@ input[type='checkbox'] {
     width: 100%;
     justify-content: space-between;
   }
-  .legal-page,
-  .content-page {
-    padding-top: 36px;
-  }
 }
 @media (max-width: 420px) {
   .main-nav {
@@ -921,12 +1111,6 @@ input[type='checkbox'] {
   }
   .language-nav {
     margin-left: auto;
-  }
-  .inquiry-card {
-    padding: 20px;
-  }
-  .contact-grid {
-    padding-bottom: 48px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -938,49 +1122,4 @@ input[type='checkbox'] {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-.prose h2 {
-  margin-top: 40px;
-}
-.prose h3 {
-  margin-top: 24px;
-}
-.prose h2,
-.prose h3 {
-  color: var(--foreground);
-  scroll-margin-top: 24px;
-}
-.prose strong {
-  color: var(--foreground);
-}
-.content-toc {
-  margin: 24px 0;
-  padding: 22px;
-  border: 1px solid var(--border);
-  border-radius: var(--card-radius);
-  background: var(--card);
-}
-.content-toc a {
-  color: var(--muted-foreground);
-}
-.content-toc a:is(:hover, :active) {
-  color: var(--foreground);
-}
-.content-toc h2 {
-  font-size: 18px;
-}
-.content-table {
-  overflow-x: auto;
-  margin: 24px 0;
-}
-.content-table table {
-  border-collapse: collapse;
-  min-width: 100%;
-  font-size: 14px;
-}
-.content-table th,
-.content-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
 }

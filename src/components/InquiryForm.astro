@@ -12,8 +12,7 @@ const legal = messages(locale).footer.sections.support;
 const privacyNotice = t.privacyNotice.split(/(\{privacy\}|\{terms\})/);
 ---
 
-<section class="inquiry-card" id="inquiry" aria-label={t.contactAriaLabel}>
-  <h2>{t.title}</h2>
+<section class="inquiry" id="inquiry" aria-label={t.contactAriaLabel}>
   <noscript>
     <p class="fallback">{t.noJsExplanation}</p>
   </noscript>
@@ -26,32 +25,34 @@ const privacyNotice = t.privacyNotice.split(/(\{privacy\}|\{terms\})/);
     data-site-key={import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || ''}
     novalidate
   >
-    <div class="field">
-      <label for="fullName">{t.fullName}</label>
-      <input
-        id="fullName"
-        name="fullName"
-        type="text"
-        autocomplete="name"
-        required
-        maxlength={inquiryLimits.fullName}
-        aria-describedby="fullName-error"
-      />
-      <p class="field-error" id="fullName-error" hidden></p>
-    </div>
-    <div class="field">
-      <label for="email">{t.email}</label>
-      <input
-        id="email"
-        name="email"
-        type="email"
-        autocomplete="email"
-        inputmode="email"
-        required
-        maxlength={inquiryLimits.email}
-        aria-describedby="email-error"
-      />
-      <p class="field-error" id="email-error" hidden></p>
+    <div class="field-pair">
+      <div class="field">
+        <label for="fullName">{t.fullName}</label>
+        <input
+          id="fullName"
+          name="fullName"
+          type="text"
+          autocomplete="name"
+          required
+          maxlength={inquiryLimits.fullName}
+          aria-describedby="fullName-error"
+        />
+        <p class="field-error" id="fullName-error" hidden></p>
+      </div>
+      <div class="field">
+        <label for="email">{t.email}</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          inputmode="email"
+          required
+          maxlength={inquiryLimits.email}
+          aria-describedby="email-error"
+        />
+        <p class="field-error" id="email-error" hidden></p>
+      </div>
     </div>
     <div class="field">
       <label for="message">
@@ -60,7 +61,7 @@ const privacyNotice = t.privacyNotice.split(/(\{privacy\}|\{terms\})/);
       <textarea
         id="message"
         name="message"
-        rows="5"
+        rows="3"
         maxlength={inquiryLimits.message}
         aria-describedby="message-hint message-error"
       ></textarea>

@@ -37,7 +37,7 @@
   },
   "legal": {
     "tableOfContents": "Índice",
-    "lastUpdated": "Última actualización"
+    "faq": "Preguntas frecuentes"
   },
   "navigation": {
     "home": "Inicio",
@@ -68,14 +68,11 @@
     },
     "title": "Sitio de consultas",
     "description": "Un punto de partida para un sitio web empresarial. Visita la página de contacto para preparar una consulta.",
-    "contactLink": "Contacto",
-    "ruleLabel": "EN / ES"
+    "contactLink": "Contacto"
   },
   "contact": {
     "panel": {
-      "intro": "También puedes contactarnos directamente.",
-      "contactTitle": "Correo y consulta",
-      "unconfiguredMailbox": "No se ha configurado un correo comercial para este sitio de referencia."
+      "contactTitle": "Correo y consulta"
     }
   },
   "inquiry": {
@@ -124,7 +121,6 @@
         "rateLimitSummary": "Demasiados intentos. Espera aproximadamente un minuto y vuelve a enviar la consulta.",
         "rateLimitReady": "Ya puedes volver a enviar la consulta."
       },
-      "title": "Iniciar una consulta",
       "website": "Sitio web",
       "unknown": "No hemos podido confirmar el resultado. Es posible que se haya recibido tu consulta. Conservamos tus datos; reintentar puede crear un duplicado. Puedes volver a intentarlo con una nueva verificación o, si no recibes respuesta, escríbenos a la dirección de correo de esta página.",
       "localePending": "Espera al resultado de la consulta antes de cambiar de idioma.",

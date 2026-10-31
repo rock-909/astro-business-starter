@@ -166,9 +166,11 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
       </div>
     </header>
     {import.meta.env.PUBLIC_APP_ENV !== 'production' && (
-      <div class="wrap experiment-strip">
-        <strong>{t.experiment.label}</strong> <span aria-hidden="true"> / </span>
-        {t.experiment.description}
+      <div class="experiment-strip">
+        <p class="wrap">
+          <strong>{t.experiment.label}</strong> <span aria-hidden="true"> / </span>
+          {t.experiment.description}
+        </p>
       </div>
     )}
     <main id="main-content" tabindex="-1">

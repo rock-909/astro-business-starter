@@ -3,6 +3,8 @@ import type { ContentPage } from '../../site';
 const contactPage = {
   metadata: {
     title: 'Contact',
+    description:
+      'Reference contact page showing the minimum information a future business should replace.',
     updatedAt: '2026-08-06',
     seo: {
       title: 'Contact — Inquiry Site Reference',

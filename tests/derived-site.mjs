@@ -83,11 +83,22 @@ const templateBrandFiles = ['opengraph-image.png', 'opengraph-image.svg', 'icon.
 const aboutPage = {
   metadata: {
     title: 'About Northwind Valves',
+    description: 'A family workshop making valves for water networks.',
     updatedAt: '2026-10-01',
     seo: {
       title: 'About us',
       description: 'Who makes Northwind valves and where they ship from.',
     },
+    faq: [
+      {
+        question: 'How long does an order take?',
+        answer: 'Stock sizes ship in five working days.\nMade-to-order valves take six weeks.',
+      },
+      {
+        question: 'Are the valves certified for drinking water?',
+        answer: 'Yes, every valve carries WRAS approval.',
+      },
+    ],
   },
   content:
     '## Our workshop\n\nNorthwind Valves has machined valves in Leeds since 2004.\n\n## Where we ship\n\nWater utilities across the UK. [Ask for a quote](/contact).',
@@ -103,8 +114,6 @@ const copy = {
       'home.metadata.title': 'Northwind Valves — valves for water networks',
       'home.title': 'Valves for water networks',
       'home.description': 'Gate, ball and check valves, shipped from Leeds.',
-      'home.ruleLabel': 'Since 2004',
-      'contact.panel.intro': 'Prefer to talk? Reach our Leeds sales desk.',
       'inquiry.form.statusPrefix.success': 'Sent:',
       'inquiry.form.statusPrefix.error': 'Problem:',
       'navigation.contactSales': 'Request a quote',
@@ -184,6 +193,7 @@ export function writeDerivedSite(repo = '.') {
           {
             metadata: {
               title,
+              description: `${identity.name} ${page} page.`,
               updatedAt: '2026-10-01',
               seo: { title, description: `${title} — ${identity.name}` },
             },
