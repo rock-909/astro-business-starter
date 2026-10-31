@@ -1182,7 +1182,7 @@ test('choosing a language in the header is remembered, so the pill does not offe
   await installColorProbe(page);
   await page.goto(site.pathFor(first, 'privacy'));
   await dismissConsent(page, site);
-  await languageLink(page, site, second!).click();
+  await switchLanguage(page, site, second!);
   await expect(page).toHaveURL(site.pathFor(second!, 'privacy'));
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(
@@ -1685,11 +1685,7 @@ test('the theme switcher shows the current theme and the header brand follows th
     await expect(logo).toBeVisible();
     expect((await logo.boundingBox())!.height).toBe(32);
     await expect(logo).toHaveCSS('filter', 'invert(1)');
-    await page
-      .getByRole('combobox', {
-        name: site.messages(site.locales.at(-1)!).accessibility.themeSelector,
-      })
-      .selectOption('light');
+    await themeButton(page, site, site.locales.at(-1)!, 'light').click();
     await expect(logo).toHaveCSS('filter', 'none');
   } else await expect(logo).toHaveCount(0);
 });
