@@ -9,7 +9,10 @@ import {
   deliveries,
   fixtureEnv,
   logsMatching,
+  defaultState,
 } from './harness.mjs';
+import { derivedRoot } from './derived-site.mjs';
+import { loadSite } from './site-config.mjs';
 import { readinessIssues } from '../scripts/readiness.mjs';
 import {
   ipv4ToInteger,
@@ -26,19 +29,7 @@ async function data(response) {
 
 test('actual built Astro Action in pinned workerd: security and delivery contract', async (suite) => {
   const h = await startHarness();
-  const reset = () =>
-    Object.assign(h.state, {
-      calls: [],
-      logs: [],
-      rateCount: 1,
-      rateTtl: 60000,
-      rate: 'accept',
-      turnstile: 'accept',
-      email: 'accept',
-      airtable: 'accept',
-      delay: 0,
-      onDelivery: null,
-    });
+  const reset = () => Object.assign(h.state, defaultState());
   try {
     await suite.test(
       'normalized shared payload, explicit IDs, exact Airtable fields, no security/unknown leakage',
@@ -567,85 +558,119 @@ function assertIsolationHeaders(response) {
   assert.equal(response.headers.get('strict-transport-security'), 'max-age=31536000');
 }
 
-test('static assets, SEO endpoints, health, 404 and client secret boundary', async () => {
-  const h = await startHarness();
-  try {
-    for (const path of [
-      '/',
-      '/contact',
-      '/privacy',
-      '/terms',
-      '/es',
-      '/es/contact',
-      '/es/privacy',
-      '/es/terms',
-    ]) {
-      // Canonical, hreflang and sitemap URLs must answer 200 themselves, not via a redirect.
-      const response = await h.mf.dispatchFetch(`http://localhost${path}`, { redirect: 'manual' });
-      assert.equal(response.status, 200, `${path} must not redirect`);
-      if (path !== '/') {
-        const slashed = await h.mf.dispatchFetch(`http://localhost${path}/`, {
-          redirect: 'manual',
-        });
-        assert.equal(slashed.status, 307);
-        assert.equal(new URL(slashed.headers.get('location'), 'http://localhost').pathname, path);
+// The template and a derived site (contact methods, logo, social links, company, own
+// copy) run the same Worker paths; expectations come from each build's own site config.
+for (const root of ['.', derivedRoot]) {
+  test(`static assets, SEO endpoints, health, 404 and client secret boundary (${root})`, async () => {
+    const { site, locales, pages, pathFor, canonical } = await loadSite(root);
+    const h = await startHarness({ root });
+    const get = (path, init) => h.mf.dispatchFetch(`http://localhost${path}`, init);
+    try {
+      for (const locale of locales) {
+        for (const { key } of pages) {
+          const path = pathFor(locale, key);
+          // Canonical, hreflang and sitemap URLs must answer 200 themselves, not via a redirect.
+          const response = await get(path, { redirect: 'manual' });
+          assert.equal(response.status, 200, `${path} must not redirect`);
+          if (path !== '/') {
+            const slashed = await get(`${path}/`, { redirect: 'manual' });
+            assert.equal(slashed.status, 307, `${path}/`);
+            assert.equal(
+              new URL(slashed.headers.get('location'), 'http://localhost').pathname,
+              path,
+            );
+          }
+          assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+          assertIsolationHeaders(response);
+          const html = await response.text();
+          assert.match(html, /noindex,nofollow/);
+          assert.equal((html.match(/<main\b/g) || []).length, 1);
+          assert.match(html, /rel="canonical"/);
+        }
       }
-      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
-      assertIsolationHeaders(response);
-      const html = await response.text();
-      assert.match(html, /noindex,nofollow/);
-      assert.equal((html.match(/<main\b/g) || []).length, 1);
-      assert.match(html, /rel="canonical"/);
+      const listed = pages.filter((page) => page.sitemap);
+      const sitemap = await (await get('/sitemap.xml')).text();
+      const entries = sitemap.match(/<url>.*?<\/url>/g) || [];
+      assert.equal(entries.length, locales.length * listed.length);
+      for (const locale of locales)
+        for (const { key, sitemap: shown } of pages) {
+          const entry = entries.find((url) => url.includes(`<loc>${canonical(locale, key)}</loc>`));
+          if (!shown) {
+            assert.equal(entry, undefined, `${key} stays out of the sitemap`);
+            continue;
+          }
+          assert.ok(entry, `${locale} ${key} is listed`);
+          // Every listed URL names all of its language versions.
+          for (const language of locales)
+            assert.ok(
+              entry.includes(`hreflang="${language}" href="${canonical(language, key)}"`),
+              `${locale} ${key} alternate ${language}`,
+            );
+          assert.match(entry, /hreflang="x-default"/);
+        }
+      const llms = await (await get('/llms.txt')).text();
+      assert.equal((llms.match(/^## /gm) || []).length, locales.length);
+      for (const locale of locales)
+        for (const { key, sitemap: shown } of pages)
+          assert.equal(llms.includes(`](${canonical(locale, key)})`), shown, `${locale} ${key}`);
+      assert.match(await (await get('/robots.txt')).text(), /Disallow: \/\n/);
+      const health = await get('/api/health');
+      assert.equal(health.headers.get('cache-control'), 'no-store');
+      assert.deepEqual(await health.json(), { status: 'ok' });
+      const security = await get('/security-policy.txt');
+      assert.equal(security.status, 404);
+      assert.equal(await security.text(), '');
+      for (const path of [
+        site.brandAssets.ogImage,
+        site.brandAssets.favicon,
+        site.brandAssets.logo?.status === 'ready' ? site.brandAssets.logo.horizontal : undefined,
+      ].filter((path) => path?.startsWith('/'))) {
+        const asset = await get(path);
+        assert.equal(asset.status, 200, path);
+        const bytes = new Uint8Array(await asset.arrayBuffer());
+        if (path.endsWith('.png')) {
+          assert.match(asset.headers.get('content-type'), /^image\/png/);
+          assert.deepEqual([...bytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+        }
+        if (path.endsWith('.svg'))
+          assert.match(asset.headers.get('content-type'), /^image\/svg\+xml/);
+      }
+      const prefixed = (locale) => (pathFor(locale, 'home') === '/' ? '' : pathFor(locale, 'home'));
+      for (const path of [
+        ...locales.map((locale) => `${prefixed(locale)}/missing`),
+        // The default language is never prefixed.
+        `/${locales[0]}${pathFor(locales[0], 'contact')}`,
+      ]) {
+        const response = await get(path);
+        assert.equal(response.status, 404, path);
+        assertIsolationHeaders(response);
+      }
+      const client = readdirSync(`${root}/dist/client`, { recursive: true })
+        .filter((file) => /\.(js|html)$/.test(file))
+        .map((file) => readFileSync(`${root}/dist/client/${file}`, 'utf8'))
+        .join('\n');
+      for (const [key, value] of Object.entries(fixtureEnv).filter(([key]) =>
+        /SECRET|TOKEN|API_KEY|PEPPER/.test(key),
+      )) {
+        assert.ok(!client.includes(value), `${key} must not appear in client assets`);
+        assert.ok(!client.includes(key), `${key} binding name must not enter browser code`);
+      }
+      assert.equal(h.state.calls.length, 0);
+    } finally {
+      await h.close();
     }
-    const sitemap = await (await h.mf.dispatchFetch('http://localhost/sitemap.xml')).text();
-    assert.equal((sitemap.match(/<url>/g) || []).length, 4);
-    assert.doesNotMatch(sitemap, /privacy|terms|\/en\//);
-    const llms = await (await h.mf.dispatchFetch('http://localhost/llms.txt')).text();
-    assert.doesNotMatch(llms, /\/privacy|\/terms/);
-    assert.match(llms, /Español/);
-    assert.match(
-      await (await h.mf.dispatchFetch('http://localhost/robots.txt')).text(),
-      /Disallow: \/\n/,
-    );
-    const health = await h.mf.dispatchFetch('http://localhost/api/health');
-    assert.equal(health.headers.get('cache-control'), 'no-store');
-    assert.deepEqual(await health.json(), { status: 'ok' });
-    const security = await h.mf.dispatchFetch('http://localhost/security-policy.txt');
-    assert.equal(security.status, 404);
-    assert.equal(await security.text(), '');
-    const og = await h.mf.dispatchFetch('http://localhost/opengraph-image.png');
-    assert.equal(og.status, 200);
-    assert.match(og.headers.get('content-type'), /^image\/png/);
-    assert.deepEqual(
-      [...new Uint8Array(await og.arrayBuffer()).slice(0, 8)],
-      [137, 80, 78, 71, 13, 10, 26, 10],
-    );
-    const icon = await h.mf.dispatchFetch('http://localhost/icon.svg');
-    assert.equal(icon.status, 200);
-    assert.match(icon.headers.get('content-type'), /^image\/svg\+xml/);
-    for (const path of ['/missing', '/en/contact', '/products', '/es/missing']) {
-      const response = await h.mf.dispatchFetch(`http://localhost${path}`);
-      assert.equal(response.status, 404);
-      assertIsolationHeaders(response);
-    }
-    const client = readdirSync('dist/client', { recursive: true })
-      .filter((file) => /\.(js|html)$/.test(file))
-      .map((file) => readFileSync(`dist/client/${file}`, 'utf8'))
-      .join('\n');
-    for (const [key, value] of Object.entries(fixtureEnv).filter(([key]) =>
-      /SECRET|TOKEN|API_KEY|PEPPER/.test(key),
-    )) {
-      assert.ok(!client.includes(value), `${key} must not appear in client assets`);
-      assert.ok(!client.includes(key), `${key} binding name must not enter browser code`);
-    }
-    assert.equal(h.state.calls.length, 0);
-  } finally {
-    await h.close();
-  }
-});
+  });
+}
 
-test('source template deliberately fails production readiness', () => {
-  const issues = readinessIssues({});
+test('unconfirmed identity, unreviewed legal copy and missing credentials fail readiness', () => {
+  const identity = JSON.parse(readFileSync(new URL('../src/site-data.json', import.meta.url)));
+  const issues = readinessIssues(
+    {},
+    {
+      ...identity,
+      readiness: { ownerConfirmedIdentity: false, legalReviewed: { en: false, es: false } },
+    },
+  );
   assert.ok(issues.some((issue) => issue.includes('owner')));
   assert.ok(issues.some((issue) => issue.includes('legal')));
   assert.ok(issues.some((issue) => issue.includes('TURNSTILE_SECRET_KEY')));

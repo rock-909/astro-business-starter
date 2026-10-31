@@ -26,7 +26,9 @@ npm run verify
 
 `verify` 依次运行类型检查、测试构建、真实 workerd Action 测试和浏览器测试。只替换 Turnstile、Resend、Airtable、Upstash 与 GA 的外部边界，不替换应用 Action。**测试构建含公开 widget 测试配置，不得部署。**
 
-已有 Chromium 时可指定 `CHROMIUM_PATH=/absolute/path/to/chromium npm run verify`。测试使用本地 `127.0.0.1:4173`，独立控制服务使用 `127.0.0.1:4174`；控制服务不进入应用构建。人名、邮箱、token 和 provider ID 都是合成测试数据。
+已有 Chromium 时可指定 `CHROMIUM_PATH=/absolute/path/to/chromium npm run verify`。人名、邮箱、token 和 provider ID 都是合成测试数据。
+
+`build:test` 同时构建模板和 `tests/derived-site.mjs` 描述的派生站夹具（配置了联系方式、Logo、社交链接并改写了文案），workerd 与浏览器测试对两份构建都运行；期望的页面和文案从各自的 `src/site.ts` 与 messages 读取，所以派生站改文案、改页面不会让测试误报。浏览器测试使用本地 `127.0.0.1:4173`–`4176`（模板应用与控制服务、派生站应用与控制服务）；同一台机器并行运行多个工作副本时用 `TEST_PORT=<起始端口>` 整体移开。控制服务不进入应用构建。端口上已有服务时，本地默认直接报错而不复用，以免测到别的工作副本或旧构建；确认它服务当前构建后才可用 `PLAYWRIGHT_REUSE_EXISTING_SERVER=true` 复用。
 
 ```sh
 npm run check
