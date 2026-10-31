@@ -102,7 +102,6 @@ const copy = {
     messages: {
       'home.metadata.title': 'Northwind Valves — valves for water networks',
       'home.title': 'Valves for water networks',
-      'home.eyebrow': 'Northwind Valves',
       'home.description': 'Gate, ball and check valves, shipped from Leeds.',
       'home.ruleLabel': 'Since 2004',
       'contact.panel.intro': 'Prefer to talk? Reach our Leeds sales desk.',

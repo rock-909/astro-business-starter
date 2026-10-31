@@ -49,7 +49,7 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
 ---
 
 <!doctype html>
-<html lang={locale}>
+<html lang={locale} data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -232,18 +232,21 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
     <section class="cookie-banner" data-cookie-banner hidden aria-label={t.cookie.title}>
       <h2>{t.cookie.title}</h2>
       <p>
-        {t.cookie.description} <a href={pathFor(locale, 'privacy')}>{t.cookie.learnMore}</a>
+        {t.cookie.description}{' '}
+        <a class="text-link" href={pathFor(locale, 'privacy')}>
+          {t.cookie.learnMore}
+        </a>
       </p>
       <div class="cookie-actions">
-        <button type="button" class="button secondary small" data-consent-reject>
+        <button type="button" class="button outline small" data-consent-reject>
           {t.cookie.rejectAll}
         </button>
-        <button type="button" class="button secondary small" data-consent-accept>
+        <button type="button" class="button outline small" data-consent-accept>
           {t.cookie.acceptAll}
         </button>
         <button
           type="button"
-          class="button secondary small"
+          class="button outline small"
           data-consent-customize
           aria-expanded="false"
           aria-controls="cookie-category-choices"
@@ -260,7 +263,7 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
           <input type="checkbox" name="advertising" data-consent-advertising />
           {t.cookie.advertising}
         </label>
-        <button type="button" class="button secondary small" data-consent-save>
+        <button type="button" class="button outline small" data-consent-save>
           {t.cookie.saveChoices}
         </button>
       </div>

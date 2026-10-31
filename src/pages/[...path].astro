@@ -46,7 +46,6 @@ const hasContactMethods = Boolean(
 <SiteLayout locale={locale} page={page} title={title} description={description}>
   {kind === 'home' ? (
     <section class="wrap hero">
-      <p class="eyebrow">{t.home.eyebrow}</p>
       <h1>{t.home.title}</h1>
       <p class="hero-copy">{t.home.description}</p>
       <a class="button" href={pathFor(locale, 'contact')}>
@@ -60,7 +59,6 @@ const hasContactMethods = Boolean(
   ) : kind === 'contact' ? (
     <div class="wrap">
       <header class="page-head">
-        <p class="eyebrow">{t.navigation.contactSales}</p>
         <h1>{content!.metadata.title}</h1>
         <StaticContent content={content!.content} locale={locale} />
       </header>
@@ -72,11 +70,20 @@ const hasContactMethods = Boolean(
           {hasContactMethods && (
             <div class="contact-methods">
               {site.contact.email && (
-                <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>
+                <a class="text-link" href={`mailto:${site.contact.email}`}>
+                  {site.contact.email}
+                </a>
               )}
-              {site.contact.phone && <a href={`tel:${site.contact.phone}`}>{site.contact.phone}</a>}
+              {site.contact.phone && (
+                <a class="text-link" href={`tel:${site.contact.phone}`}>
+                  {site.contact.phone}
+                </a>
+              )}
               {site.contact.whatsapp && (
-                <a href={`https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}`}>
+                <a
+                  class="text-link"
+                  href={`https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}`}
+                >
                   WhatsApp {site.contact.whatsapp}
                 </a>
               )}
@@ -94,7 +101,6 @@ const hasContactMethods = Boolean(
     </article>
   ) : (
     <article class="wrap legal-page">
-      <p class="eyebrow">{t.footer.columns.support}</p>
       <h1>{content!.metadata.title}</h1>
       <StaticContent content={content!.content} locale={locale} showToc />
       <p class="legal-note">

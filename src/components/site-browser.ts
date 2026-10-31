@@ -156,17 +156,26 @@ new ResizeObserver(() =>
 
 const themeSelect = document.querySelector<HTMLSelectElement>('[data-theme-select]')!;
 themeSelect.hidden = false;
+// Like the reference site, a first visit is light; visitors can still choose dark or the system.
+function applyTheme(theme: string) {
+  // Swap every colour at once instead of letting links and buttons fade through their transition.
+  const root = document.documentElement;
+  root.classList.add('theme-switching');
+  if (theme === 'system') delete root.dataset.theme;
+  else root.dataset.theme = theme;
+  void getComputedStyle(root).color;
+  requestAnimationFrame(() => root.classList.remove('theme-switching'));
+}
 function syncTheme() {
-  let theme = 'system';
+  let theme = 'light';
   try {
-    theme = localStorage.getItem('theme') || 'system';
+    theme = localStorage.getItem('theme') || 'light';
   } catch {
-    /* System is the safe default. */
+    /* Light is the default. */
   }
-  if (!['light', 'dark', 'system'].includes(theme)) theme = 'system';
+  if (!['light', 'dark', 'system'].includes(theme)) theme = 'light';
   themeSelect.value = theme;
-  if (theme === 'system') delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = theme;
+  applyTheme(theme);
 }
 themeSelect.addEventListener('change', () => {
   const theme = themeSelect.value;
@@ -175,8 +184,7 @@ themeSelect.addEventListener('change', () => {
   } catch {
     /* Preference still applies in this document. */
   }
-  if (theme === 'system') delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = theme;
+  applyTheme(theme);
 });
 window.addEventListener('storage', (event) => {
   if (event.key === null || event.key === 'theme') syncTheme();

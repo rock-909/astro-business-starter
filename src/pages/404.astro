@@ -14,14 +14,14 @@ const t = messages(locale);
   notFound
 >
   <section class="wrap not-found">
-    <p class="eyebrow">404</p>
+    <p class="not-found-code">404</p>
     <h1>{t.errors.notFound.title}</h1>
     <p class="prose">{t.errors.notFound.description}</p>
     <div class="not-found-actions">
       <a class="button" href={pathFor(locale, 'home')}>
         {t.errors.notFound.goHome}
       </a>
-      <a class="button secondary" href={pathFor(locale, 'contact')}>
+      <a class="button outline" href={pathFor(locale, 'contact')}>
         {t.footer.sections.navigation.contact}
       </a>
     </div>

@@ -91,9 +91,13 @@ const privacyNotice = t.privacyNotice.split(/(\{privacy\}|\{terms\})/);
     <p class="privacy-notice">
       {privacyNotice.map((part) =>
         part === '{privacy}' ? (
-          <a href={pathFor(locale, 'privacy')}>{legal.privacy}</a>
+          <a class="text-link" href={pathFor(locale, 'privacy')}>
+            {legal.privacy}
+          </a>
         ) : part === '{terms}' ? (
-          <a href={pathFor(locale, 'terms')}>{legal.terms}</a>
+          <a class="text-link" href={pathFor(locale, 'terms')}>
+            {legal.terms}
+          </a>
         ) : (
           part
         ),
@@ -102,8 +106,11 @@ const privacyNotice = t.privacyNotice.split(/(\{privacy\}|\{terms\})/);
   </form>
   {site.contact.email && (
     <p class="fallback">
-      {t.noJsEmailPrefix} <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>.{' '}
-      {t.turnstile.rescueAfterEmail}
+      {t.noJsEmailPrefix}{' '}
+      <a class="text-link" href={`mailto:${site.contact.email}`}>
+        {site.contact.email}
+      </a>
+      . {t.turnstile.rescueAfterEmail}
     </p>
   )}
 </section>
