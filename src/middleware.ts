@@ -13,7 +13,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (context.isPrerendered) return next();
   const { action, serializeActionResult } = getActionContext(context);
   if (!action) return secure(await next());
-  // Covers both /_actions/inquiry RPC and native ?_action=inquiry invocations.
+  // The browser only uses /_actions/inquiry RPC. A native ?_action= form call on an
+  // on-demand route would deliver the inquiry yet answer with that page: refuse it.
+  if (action.calledFrom === 'form')
+    return secure(new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } }));
   // Native limit covers absent Content-Length; supplement declared-length bodies.
   try {
     assertInquiryAdmission(context.request);

@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 // Use the EXACT Miniflare/workerd shipped by the pinned Wrangler/adapter, not a
 // second, older simulator. This supported conversion bridges Miniflare 5's API.
@@ -30,9 +30,29 @@ const json = (body, status = 200) =>
     status,
     headers: { 'content-type': 'application/json' },
   });
-export async function startHarness({ port = 0, bindings = {} } = {}) {
+// The shared suites send many requests from one fixture IP, so the native limiter
+// gets a high default; pass nativeLimit: 'deployed' to use the wrangler.jsonc limit.
+export async function startHarness({
+  port = 0,
+  bindings = {},
+  root = '.',
+  nativeLimit = 1_000_000,
+} = {}) {
+  const server = resolve(root, 'dist/server');
+  // The generated deploy config, so binding names and limits match what deploys.
+  const deployed = JSON.parse(readFileSync(resolve(server, 'wrangler.json'), 'utf8'));
+  const ratelimits = Object.fromEntries(
+    deployed.ratelimits.map(({ name, namespace_id, simple }) => [
+      name,
+      {
+        namespace_id,
+        simple: { ...simple, limit: nativeLimit === 'deployed' ? simple.limit : nativeLimit },
+      },
+    ]),
+  );
   const state = {
     calls: [],
+    logs: [],
     rateCount: 1,
     rateTtl: 60000,
     rate: 'accept',
@@ -45,11 +65,11 @@ export async function startHarness({ port = 0, bindings = {} } = {}) {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       name: 'astro-business-starter-test',
-      modulesRoot: resolve('dist/server'),
+      modulesRoot: server,
       modules: [
         {
           type: 'ESModule',
-          path: resolve('dist/server/test-transport.mjs'),
+          path: resolve(server, 'test-transport.mjs'),
           // Node fetch refuses mismatched Content-Length. Set it inside workerd,
           // then invoke the unchanged generated entry and registered Action.
           // This virtual module exists only in the test harness, never the build.
@@ -66,11 +86,11 @@ export async function startHarness({ port = 0, bindings = {} } = {}) {
           }};
         `,
         },
-        ...readdirSync('dist/server', { recursive: true })
+        ...readdirSync(server, { recursive: true })
           .filter((path) => path.endsWith('.mjs') && !path.startsWith('.'))
           .map((path) => ({
             type: 'ESModule',
-            path: resolve('dist/server', path),
+            path: resolve(server, path),
           })),
       ],
       compatibilityDate: '2026-10-19',
@@ -79,8 +99,11 @@ export async function startHarness({ port = 0, bindings = {} } = {}) {
       port,
       cf: false,
       bindings: { ...fixtureEnv, ...bindings },
+      ratelimits,
+      // Worker console lines, for asserting log categories (never buyer data).
+      handleStructuredLogs: ({ level, message }) => state.logs.push({ level, message }),
       assets: {
-        directory: resolve('dist/client'),
+        directory: resolve(root, 'dist/client'),
         binding: 'ASSETS',
         routerConfig: { has_user_worker: true },
         assetConfig: {
@@ -180,4 +203,14 @@ export async function action(harness, payload = validInput, options = {}) {
 }
 export function deliveries(state) {
   return state.calls.filter((call) => /api\.(resend|airtable)\.com/.test(call.url));
+}
+/** Worker log lines matching a category, after giving workerd's log pipe time to flush. */
+export async function logsMatching(state, pattern, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  let found = state.logs.filter(({ message }) => pattern.test(message));
+  while (!found.length && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    found = state.logs.filter(({ message }) => pattern.test(message));
+  }
+  return found.map(({ message }) => message);
 }

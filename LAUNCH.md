@@ -24,7 +24,7 @@
 | `npx wrangler secret put <NAME>` | `TURNSTILE_SECRET_KEY`、`RESEND_API_KEY`、`AIRTABLE_API_KEY`、`UPSTASH_REDIS_REST_TOKEN`、`RATE_LIMIT_PEPPER` |
 | 派生仓库 `wrangler.jsonc` 的 `vars`（也可用 secret） | `APP_ENV`、`PUBLIC_SITE_URL`、`TURNSTILE_ALLOWED_HOSTS`、`RESEND_FROM_EMAIL`、`INQUIRY_TO_EMAIL`、`AIRTABLE_BASE_ID`、`AIRTABLE_TABLE_NAME`、`UPSTASH_REDIS_REST_URL` |
 
-名称以 `.dev.vars.example` 为准。若 `TURNSTILE_ALLOWED_HOSTS`、`PUBLIC_SITE_URL`、`RESEND_FROM_EMAIL`、`INQUIRY_TO_EMAIL`、`AIRTABLE_BASE_ID` 或 `AIRTABLE_TABLE_NAME` 被一次部署清空，询盘就会停止：允许的主机名为空时每次提交都返回 `TURNSTILE_UNAVAILABLE`；两个交付通道都缺配置时返回 `DELIVERY_UNCONFIRMED`。部署后用 `npx wrangler secret list` 和当前版本的绑定列表核对。
+名称以 `.dev.vars.example` 为准。`TURNSTILE_ALLOWED_HOSTS` 写主机名，用逗号分隔（如 `supplier.com,www.supplier.com`）；同时用 apex 和 `www` 提供站点时两个都要列。写成 `https://` 网址、带端口或用分号、空格分隔时只取主机名；无法识别的条目被忽略，`readiness` 能看到这个值时会拒绝它们。若 `TURNSTILE_ALLOWED_HOSTS`、`PUBLIC_SITE_URL`、`RESEND_FROM_EMAIL`、`INQUIRY_TO_EMAIL`、`AIRTABLE_BASE_ID` 或 `AIRTABLE_TABLE_NAME` 被一次部署清空，询盘就会停止：允许的主机名为空（或全部无法识别）时每次提交都返回 `TURNSTILE_UNAVAILABLE`，日志为 `inquiry.turnstile_unavailable` 且 `reason: "configuration"`；两个交付通道都缺配置时返回 `DELIVERY_UNCONFIRMED`。部署后用 `npx wrangler secret list` 和当前版本的绑定列表核对。
 
 `PUBLIC_*` 构建值（`PUBLIC_APP_ENV`、`PUBLIC_SITE_URL`、`PUBLIC_TURNSTILE_SITE_KEY`、`PUBLIC_GA_MEASUREMENT_ID`、搜索验证值）在构建时写入页面，来自构建机的 shell 或 `.env.production`，见 `.env.example`；不要把 secret 放进 `PUBLIC_*`。`readiness` 同样要求服务端值在检查进程中可见，那只是本地检查，不会替你绑定到 Cloudflare。
 
@@ -39,6 +39,8 @@
 
 **Turnstile。** 在 Turnstile widget 的主机名列表里加入正式域名；`TURNSTILE_ALLOWED_HOSTS` 必须包含 `PUBLIC_SITE_URL` 的主机名。主机名不匹配时提交被拒，日志为 `inquiry.turnstile_rejected` 且 `reason: "invalid-hostname"`，这是区分主机配置错误的唯一信号。
 
+**限流。** `wrangler.jsonc` 的 `ratelimits` 声明 `INQUIRY_RATE_LIMITER`：在调用 Upstash 之前，按同一个 IP 桶做一次每个 Cloudflare 机房内的廉价预判，已超限的请求不再消耗 Upstash 额度；精确的每分钟 10 次仍由 Upstash 计数。`namespace_id` 在同一 Cloudflare 账户内须唯一，同账户下的另一个派生站要换一个值。预判不能代替 Upstash，`UPSTASH_*` 和 `RATE_LIMIT_PEPPER` 仍然必需。
+
 **Resend。** 先在 Resend 验证 `RESEND_FROM_EMAIL` 所在的发信域名（SPF/DKIM），再用正式域名提交一条合成询盘，确认它确实进入 `INQUIRY_TO_EMAIL` 收件箱（而非垃圾箱）。Resend 显示已接受只代表供应商接收，不代表收件箱到达。
 
 **自定义域名与 TLS。** 把 Worker 绑定到正式域名并确认证书生效，`PUBLIC_SITE_URL` 与之一致。模板不发送 `Strict-Transport-Security`；是否在 Cloudflare 开启 HSTS，以及是否加 `includeSubDomains`/`preload`，由域名所有者按整个域名的情况决定——`preload` 会约束所有子域名且难以撤回。
@@ -51,7 +53,7 @@
 
 ## 6. 日志
 
-`wrangler.jsonc` 开启 Workers Logs，但只保留站点自己的 `console` 日志（参考号、类别和通道标记，从不含表单字段），关闭调用日志和 traces。用 Cloudflare 面板的 Workers Logs 回查，或用 `npx wrangler tail` 实时查看。需要关注的日志：`inquiry.accepted`（含 `emailAccepted`、`recordAccepted`）、`inquiry.email_acceptance_unconfirmed`、`inquiry.airtable_acceptance_unconfirmed`、`inquiry.turnstile_rejected`、`inquiry.rate_limit_unavailable`。
+`wrangler.jsonc` 开启 Workers Logs，但只保留站点自己的 `console` 日志（参考号、类别和通道标记，从不含表单字段），关闭调用日志和 traces。用 Cloudflare 面板的 Workers Logs 回查，或用 `npx wrangler tail` 实时查看。需要关注的日志：`inquiry.accepted`（含 `emailAccepted`、`recordAccepted`）、`inquiry.email_acceptance_unconfirmed`、`inquiry.airtable_acceptance_unconfirmed`、`inquiry.turnstile_rejected`、`inquiry.turnstile_unavailable`、`inquiry.rate_limit_unavailable`、`inquiry.unexpected_error`。后三条带 `reason`：`configuration` 表示配置有误，每次都会出现，必须修；`provider`/`storage` 是 Turnstile 或 Upstash 的故障，通常是偶发的；`precheck` 表示原生限流预判出错，Upstash 照常计数。限流配置有误时询盘照常放行（已批准的故障策略），但限流从此不再生效。
 
 保留期与费用（以 Cloudflare 当前价格页为准）：Free 计划保留 3 天、每天 200k 条事件；Paid 计划保留 7 天、每月 20M 条事件。自 2026-12-01 起 Workers Logs 改按 Cloudflare Observability 计价，上线前核对所在账户的费用。
 
@@ -67,7 +69,7 @@
 
 1. **静态门禁**：`npm run verify`、`npm run readiness`、`PUBLIC_APP_ENV=production npm run build` 均通过。
 2. **Cloudflare 绑定**：第 2 节列出的值都在当前部署版本中（`wrangler secret list` 与版本绑定），没有面板普通变量。
-3. **供应商接收**：从正式域名提交一条合成询盘，买家看到参考号，日志中 `inquiry.accepted` 的 `emailAccepted` 与 `recordAccepted` 都为 `true`。
+3. **供应商接收**：从正式域名提交一条合成询盘，买家看到参考号，日志中 `inquiry.accepted` 的 `emailAccepted` 与 `recordAccepted` 都为 `true`，且没有任何带 `reason: "configuration"` 的日志。
 4. **业务送达**：这条询盘出现在 `INQUIRY_TO_EMAIL` 收件箱，Airtable 中有同一 `Reference ID` 的整行；随后按你的流程标记或删除这条测试记录。
 5. **域名与搜索**：HTTPS 正常，`robots.txt` 与 `sitemap.xml` 内容正确，GSC/Bing 已验证并提交 sitemap，GA4 关键事件已设置（如使用 GA）。
 6. **法律与交接**：双语隐私与条款已由负责人审阅，下面的数据清单已交给撰写隐私政策的人。
@@ -82,7 +84,7 @@
 | 页面语言 | 提交询盘 | 只进邮件 | 同上 |
 | 5 个 UTM 值、`landingPage`、`capturedAt` | 仅在访客同意分析后 | 邮件与 Airtable 对应列；提交前存于浏览器 `sessionStorage` 的 `inquiry_attribution` | 撤回同意即清除浏览器记录；已交付的邮件/CRM 不会自动删除 |
 | `gclid`、`wbraid`、`gbraid` | 仅在访客同意广告后 | 只进邮件；提交前存于 `inquiry_attribution` | 同上 |
-| 访客 IP（`cf-connecting-ip`） | 提交询盘 | 作为 `remoteip` 发给 Cloudflare Turnstile 校验；限流时 IPv4 地址或 IPv6 /64 前缀经 `RATE_LIMIT_PEPPER` 做 HMAC 后作为 Upstash 计数键 | Upstash 键 60 秒后过期；IP 不进邮件、Airtable 或日志 |
+| 访客 IP（`cf-connecting-ip`） | 提交询盘 | 作为 `remoteip` 发给 Cloudflare Turnstile 校验；限流时 IPv4 地址或 IPv6 /64 前缀经 `RATE_LIMIT_PEPPER` 做 HMAC 后作为 Upstash 与 Cloudflare 原生限流的计数键 | 计数键 60 秒后过期；IP 不进邮件、Airtable 或日志 |
 | Turnstile 挑战 | 打开询盘表单 | Cloudflare Turnstile 在浏览器中运行 | 按 Cloudflare 的政策 |
 | 表单草稿（姓名、邮箱、留言） | 填写表单时 | 浏览器 `sessionStorage` 的 `inquiry-draft`，不离开浏览器 | 当前标签页会话；确认成功后清除 |
 | 同意选择 | 访客做出选择 | 浏览器 `localStorage` 的 `cookie-consent` | 直到访客更改或清除 |

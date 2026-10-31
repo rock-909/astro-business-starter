@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parse } from 'devalue';
 import { readFileSync, readdirSync } from 'node:fs';
-import { startHarness, action, validInput, deliveries, fixtureEnv } from './harness.mjs';
+import {
+  startHarness,
+  action,
+  validInput,
+  deliveries,
+  fixtureEnv,
+  logsMatching,
+} from './harness.mjs';
 import { readinessIssues } from '../scripts/readiness.mjs';
 import {
   ipv4ToInteger,
@@ -22,6 +29,7 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
   const reset = () =>
     Object.assign(h.state, {
       calls: [],
+      logs: [],
       rateCount: 1,
       rateTtl: 60000,
       rate: 'accept',
@@ -206,6 +214,25 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
     );
 
     await suite.test(
+      'native ?_action= form calls on on-demand routes are refused before any processing',
+      async () => {
+        for (const path of [
+          '/missing?_action=inquiry',
+          '/es/missing?_action=inquiry',
+          '/api/health?_action=inquiry',
+        ]) {
+          reset();
+          h.state.rateCount = 11;
+          const response = await action(h, validInput, { path });
+          assert.equal(response.status, 404, path);
+          assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+          assert.equal(response.headers.get('retry-after'), null);
+          assert.equal(h.state.calls.length, 0, path);
+        }
+      },
+    );
+
+    await suite.test(
       'actual body byte limit protects streamed ASCII and UTF-8 before parsing',
       async () => {
         for (const body of [
@@ -294,7 +321,7 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
     });
 
     await suite.test(
-      'true overlimit returns Retry-After; store outage continues Turnstile (not bypass)',
+      'true overlimit returns Retry-After; store outage is logged and continues Turnstile (not bypass)',
       async () => {
         reset();
         h.state.rateCount = 11;
@@ -311,6 +338,9 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
         assert.equal((await data(response)).message, 'TURNSTILE_REJECTED');
         assert.equal(h.state.calls.length, 2);
         assert.equal(deliveries(h.state).length, 0);
+        assert.deepEqual(await logsMatching(h.state, /rate_limit_unavailable/), [
+          "inquiry.rate_limit_unavailable { reason: 'storage' }",
+        ]);
         reset();
         h.state.rate = 'malformed';
         assert.equal((await action(h)).status, 200);
@@ -356,6 +386,10 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
             unavailable ? 'TURNSTILE_UNAVAILABLE' : 'TURNSTILE_REJECTED',
           );
           assert.equal(deliveries(h.state).length, 0);
+          if (unavailable)
+            assert.deepEqual(await logsMatching(h.state, /turnstile_unavailable/), [
+              "inquiry.turnstile_unavailable { reason: 'provider' }",
+            ]);
         }
       },
     );
@@ -414,6 +448,7 @@ test('absent production credentials/test secret cannot enable a verification byp
     { TURNSTILE_SECRET_KEY: '' },
     { TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA' },
     { TURNSTILE_ALLOWED_HOSTS: '', PUBLIC_SITE_URL: '' },
+    { TURNSTILE_ALLOWED_HOSTS: '*.example.invalid' },
   ]) {
     const h = await startHarness({ bindings });
     try {
@@ -421,9 +456,81 @@ test('absent production credentials/test secret cannot enable a verification byp
       assert.equal(response.status, 503);
       assert.equal((await data(response)).message, 'TURNSTILE_UNAVAILABLE');
       assert.equal(deliveries(h.state).length, 0);
+      assert.deepEqual(await logsMatching(h.state, /turnstile_unavailable/), [
+        "inquiry.turnstile_unavailable { reason: 'configuration' }",
+      ]);
     } finally {
       await h.close();
     }
+  }
+});
+
+test('TURNSTILE_ALLOWED_HOSTS written as URLs, with a port or other separators still verifies', async () => {
+  for (const hosts of [
+    'https://example.invalid',
+    'https://example.invalid/',
+    'example.invalid:443',
+    'www.example.invalid example.invalid',
+    'www.example.invalid;EXAMPLE.invalid',
+  ]) {
+    const h = await startHarness({ bindings: { TURNSTILE_ALLOWED_HOSTS: hosts } });
+    try {
+      const response = await action(h);
+      assert.equal(response.status, 200, hosts);
+      assert.equal(deliveries(h.state).length, 2, hosts);
+    } finally {
+      await h.close();
+    }
+  }
+});
+
+test('rate-limit misconfiguration is logged apart from storage outages and still fails open', async () => {
+  for (const bindings of [
+    { RATE_LIMIT_PEPPER: 'too-short' },
+    { UPSTASH_REDIS_REST_URL: '' },
+    { UPSTASH_REDIS_REST_TOKEN: '' },
+  ]) {
+    const h = await startHarness({ bindings });
+    try {
+      const response = await action(h);
+      assert.equal(response.status, 200);
+      assert.equal(deliveries(h.state).length, 2);
+      assert.ok(!h.state.calls.some((call) => call.url.startsWith('https://rate-limit.invalid')));
+      assert.deepEqual(await logsMatching(h.state, /rate_limit_unavailable/), [
+        "inquiry.rate_limit_unavailable { reason: 'configuration' }",
+      ]);
+    } finally {
+      await h.close();
+    }
+  }
+});
+
+test('native rate-limit pre-check refuses an over-limit IP before the paid Upstash call', async () => {
+  const h = await startHarness({ nativeLimit: 'deployed' });
+  try {
+    const statuses = [];
+    for (let i = 0; i < 21; i++) {
+      const response = await action(h, { website: 'bot' });
+      statuses.push(response.status);
+      if (response.status === 429) assert.equal(response.headers.get('retry-after'), '60');
+    }
+    const upstash = () =>
+      h.state.calls.filter((call) => call.url.startsWith('https://rate-limit.invalid')).length;
+    // The Upstash fixture never reports over-limit, so every 429 is the native pre-check.
+    // 21 requests span at most two one-minute windows, so at most 20 pass.
+    assert.equal(statuses[0], 200);
+    assert.ok(statuses.includes(429), String(statuses));
+    assert.equal(upstash(), statuses.filter((status) => status === 200).length);
+    const before = upstash();
+    const other = await action(
+      h,
+      { website: 'bot' },
+      { headers: { 'cf-connecting-ip': '198.51.100.7' } },
+    );
+    assert.equal(other.status, 200);
+    assert.equal(upstash(), before + 1);
+  } finally {
+    await h.close();
   }
 });
 
@@ -538,6 +645,17 @@ test('readiness rejects present but malformed delivery/rate/public configuration
       RESEND_FROM_EMAIL: 'Sales Team <sales@supplier.co.uk>',
     }).some((issue) => issue.startsWith('RESEND_FROM_EMAIL')),
   );
+});
+
+test('readiness reads TURNSTILE_ALLOWED_HOSTS the way the Worker does', () => {
+  const hostIssues = (TURNSTILE_ALLOWED_HOSTS) =>
+    readinessIssues({ PUBLIC_SITE_URL: 'https://supplier.co.uk', TURNSTILE_ALLOWED_HOSTS }).filter(
+      (issue) => issue.startsWith('TURNSTILE_ALLOWED_HOSTS'),
+    );
+  assert.deepEqual(hostIssues('https://supplier.co.uk/, www.supplier.co.uk:443'), []);
+  assert.deepEqual(hostIssues('supplier.co.uk;www.supplier.co.uk'), []);
+  assert.equal(hostIssues('supplier.co.uk, *.supplier.co.uk').length, 1);
+  assert.equal(hostIssues('www.supplier.co.uk').length, 1);
 });
 
 test('IP parsing retains strict segments, compression and embedded IPv4', () => {
