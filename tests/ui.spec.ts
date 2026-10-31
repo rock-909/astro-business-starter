@@ -131,8 +131,10 @@ test('configured contact methods, logo and social links render; unconfigured one
     await page.goto(contactPath(site, locale));
     const main = page.getByRole('main');
     if (contact.email)
+      // Scoped to the contact aside: the form's fallback line repeats the mailbox and
+      // would otherwise hide a missing contact method.
       await expect(
-        main.getByRole('link', { name: contact.email, exact: true }).first(),
+        main.locator('.contact-aside').getByRole('link', { name: contact.email, exact: true }),
       ).toHaveAttribute('href', `mailto:${contact.email}`);
     else await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
     const phone = main.locator('a[href^="tel:"]');
