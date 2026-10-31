@@ -147,7 +147,10 @@ test('configured contact methods, logo and social links render; unconfigured one
       await expect
         .poll(() => logo.evaluate((image: HTMLImageElement) => image.naturalWidth))
         .toBeGreaterThan(0);
-    } else await expect(logo).toHaveCount(0);
+    } else {
+      await expect(logo).toHaveCount(0);
+      await expect(page.getByRole('banner').locator('.brand .brand-mark')).toBeVisible();
+    }
 
     const footer = page.getByRole('contentinfo');
     const newTab = site.messages(locale).accessibility.opensInNewTab;
