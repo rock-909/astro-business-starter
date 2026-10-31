@@ -24,27 +24,32 @@ const htmlEntities: Record<string, string> = {
 // Astro escapes text the same way before it reaches the HTML.
 const escapeHtml = (text: string) => text.replace(/[&<>'"]/g, (char) => htmlEntities[char]);
 async function withLongCompanyEmail(page: Page, site: Site) {
-  await page.route(/\/contact$/, async (route) => {
-    if (route.request().resourceType() !== 'document') return route.continue();
-    const response = await route.fetch();
-    const link = `<a href="mailto:${longEmail}">${longEmail}</a>`;
-    const methods = `<div class="contact-methods">${link}</div>`;
-    let html = await response.text();
-    const unconfigured = site.locales
-      .map(
-        (locale) => `<p>${escapeHtml(site.messages(locale).contact.panel.unconfiguredMailbox)}</p>`,
-      )
-      .find((paragraph) => html.includes(paragraph));
-    const configured = /<div class="contact-methods">[\s\S]*?<\/div>/;
-    if (configured.test(html)) {
-      html = html.replace(configured, methods);
-      if (unconfigured) html = html.replace(unconfigured, '');
-    } else if (unconfigured) html = html.replace(unconfigured, methods);
-    else html = html.replace('</aside>', `${methods}</aside>`);
-    if (!/class="fallback"[^>]*>[^<]*<a href="mailto:/.test(html))
-      html = html.replace('</form>', `</form><p class="fallback">${link}</p>`);
-    await route.fulfill({ response, body: html });
-  });
+  const contactPaths = site.locales.map((locale) => site.pathFor(locale, 'contact'));
+  await page.route(
+    (url) => contactPaths.includes(url.pathname),
+    async (route) => {
+      if (route.request().resourceType() !== 'document') return route.continue();
+      const response = await route.fetch();
+      const link = `<a href="mailto:${longEmail}">${longEmail}</a>`;
+      const methods = `<div class="contact-methods">${link}</div>`;
+      let html = await response.text();
+      const unconfigured = site.locales
+        .map(
+          (locale) =>
+            `<p>${escapeHtml(site.messages(locale).contact.panel.unconfiguredMailbox)}</p>`,
+        )
+        .find((paragraph) => html.includes(paragraph));
+      const configured = /<div class="contact-methods">[\s\S]*?<\/div>/;
+      if (configured.test(html)) {
+        html = html.replace(configured, methods);
+        if (unconfigured) html = html.replace(unconfigured, '');
+      } else if (unconfigured) html = html.replace(unconfigured, methods);
+      else html = html.replace('</aside>', `${methods}</aside>`);
+      if (!/class="fallback"[^>]*>[^<]*<a href="mailto:/.test(html))
+        html = html.replace('</form>', `</form><p class="fallback">${link}</p>`);
+      await route.fulfill({ response, body: html });
+    },
+  );
 }
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 async function dismissConsent(page: Page, site: Site) {
@@ -394,7 +399,12 @@ test('contact pages reflow on phones without horizontal scrolling', async ({ pag
   await expect(page.locator('.privacy-notice')).toHaveText(
     t.inquiry.form.privacyNotice.replace('{privacy}', privacy).replace('{terms}', terms),
   );
-  await expect(page.locator('.privacy-notice a')).toHaveText([privacy, terms]);
+  const legalLinks = { '{privacy}': privacy, '{terms}': terms };
+  await expect(page.locator('.privacy-notice a')).toHaveText(
+    t.inquiry.form.privacyNotice
+      .match(/\{privacy\}|\{terms\}/g)!
+      .map((placeholder) => legalLinks[placeholder as keyof typeof legalLinks]),
+  );
   // In-site links and buttons carry no external-link arrow; only new-tab social links do.
   await expect(page.locator('[data-submit]')).toHaveText(t.inquiry.form.submit);
 });

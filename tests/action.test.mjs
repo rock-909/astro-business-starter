@@ -191,10 +191,11 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
         // Static assets do not execute native form Actions: the asset router rejects
         // POST with 405 before reaching Astro (dynamic routes use the origin gate).
         reset();
+        const { locales, pathFor } = await loadSite();
         assert.equal(
           (
             await action(h, validInput, {
-              path: '/contact?_action=inquiry',
+              path: `${pathFor(locales[0], 'contact')}?_action=inquiry`,
               headers: { origin: 'https://attacker.invalid' },
             })
           ).status,
