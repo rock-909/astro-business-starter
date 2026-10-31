@@ -94,6 +94,22 @@ const productionPrerequisites = {
   RATE_LIMIT_PEPPER: 'abcdefghijklmnopqrstuvwxyz0123456789',
 };
 
+test('EN and ES messages define the same keys with the same value shapes', () => {
+  // Browser copy is typed from EN only, so a missing ES key would otherwise pass `npm run check`.
+  const shapes = (value, path = '') =>
+    value && typeof value === 'object'
+      ? Object.entries(value).flatMap(([key, child]) => shapes(child, `${path}/${key}`))
+      : [`${path}: ${typeof value}`];
+  const [en, es] = ['en', 'es'].map((locale) =>
+    shapes(
+      JSON.parse(
+        readFileSync(new URL(`../src/content/${locale}/messages.json`, import.meta.url), 'utf8'),
+      ),
+    ).sort(),
+  );
+  assert.deepEqual(es, en);
+});
+
 test('optional company facts are validated and consumed without requiring an organization', async () => {
   const server = await createServer({
     configFile: false,
@@ -349,7 +365,15 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
         for (const [file, text] of Object.entries(scenario.files))
           writeFileSync(join(fixture, file), text);
         if (scenario.ready) {
-          writeFileSync(join(fixture, 'src/site-data.json'), JSON.stringify(launchIdentity));
+          // A derived site may ship a raster favicon instead of the template SVG.
+          cpSync(join(root, 'public/opengraph-image.png'), join(fixture, 'public/brand-icon.png'));
+          writeFileSync(
+            join(fixture, 'src/site-data.json'),
+            JSON.stringify({
+              ...launchIdentity,
+              brandAssets: { ...launchIdentity.brandAssets, favicon: '/brand-icon.png' },
+            }),
+          );
           writeLaunchCopy(fixture);
         }
         const env = {
@@ -385,6 +409,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
           assert.equal(result.status, 0, output);
           const html = readFileSync(join(fixture, 'dist/client/index.html'), 'utf8');
           if (scenario.ready) {
+            assert.match(html, /<link rel="icon" type="image\/png" href="\/brand-icon.png">/);
             assert.match(html, /index,follow,max-image-preview:large/);
             assert.match(html, /data-production="true"/);
             const client = readdirSync(join(fixture, 'dist/client'), {
@@ -412,6 +437,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
               await h.close();
             }
           } else {
+            assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/icon.svg">/);
             assert.match(html, /noindex,nofollow/);
             assert.match(html, /data-production="false"/);
             assert.match(html, /https:\/\/shell\.supplier\.co\.uk/);
