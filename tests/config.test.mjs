@@ -42,11 +42,15 @@ const rewriteTemplateLeaves = (node, path = '') => {
     else if (!templateOnlyKeys.test(leaf) && templateCopy.test(value)) node[key] = launchCopy;
   }
 };
-const writePage = (root, locale, page, text, comment = '') =>
+const writePage = (root, locale, page, text, comment = '', seoTitle = page) =>
   writeFileSync(
     join(root, `src/content/${locale}/${page}.ts`),
     `${comment}export default ${JSON.stringify({
-      metadata: { title: page, updatedAt: '2026-10-25', seo: { title: page, description: text } },
+      metadata: {
+        title: page,
+        updatedAt: '2026-10-25',
+        seo: { title: seoTitle, description: text },
+      },
       content: text,
     })};`,
   );
@@ -287,13 +291,15 @@ test('readiness rejects template copy wherever it renders and accepts owner-rewr
       messages.home.title = starterTitle[locale] ?? starterTitle.en;
       messages.home.ruleLabel = 'EN / ES';
       messages.home.description = starter;
+      messages.home.metadata.description = starter;
+      messages['structured-data'].website.description = starter;
       messages.navigation.siteDescription = starter;
       // Only rendered in states readiness already blocks, or not template copy at all.
       messages.experiment.label = starter;
       messages.contact.panel.unconfiguredMailbox = starter;
       messages.inquiry.form.referenceLabel = 'Reference';
       writeFileSync(file, JSON.stringify(messages));
-      writePage(fixture, locale, 'contact', starter);
+      writePage(fixture, locale, 'contact', starter, '', starter);
       writePage(fixture, locale, 'privacy', 'Privacy policy — to be completed');
       const issues = readinessIssues(
         productionPrerequisites,
@@ -306,7 +312,10 @@ test('readiness rejects template copy wherever it renders and accepts owner-rewr
           `${locale}/messages home.title still contains template copy`,
           `${locale}/messages home.ruleLabel still contains template copy`,
           `${locale}/messages home.description still contains template copy`,
+          `${locale}/messages home.metadata.description still contains template copy`,
+          `${locale}/messages structured-data.website.description still contains template copy`,
           `${locale}/messages navigation.siteDescription still contains template copy`,
+          `${locale}/contact metadata.seo.title still contains template copy`,
           `${locale}/contact metadata.seo.description still contains template copy`,
           `${locale}/contact content still contains template copy`,
           `${locale}/privacy still contains template legal text`,
