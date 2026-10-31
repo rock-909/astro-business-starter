@@ -63,6 +63,21 @@ Node 24.22.1. "Before" runs replace only `src/lib/inquiry.ts`, `src/middleware.t
 
 The SEC-05 regression goes through the registered Action in workerd: for requests carrying `x-test-platform-fault`, the test-only transport wrapper makes `crypto.getRandomValues` throw a plain `Error` (used by the honeypot reference ID), then restores it. It asserts status 500, message `INTERNAL_ERROR`, no marker in the body or Worker logs, and that `TURNSTILE_REQUIRED` keeps its code and message. The wrapper is not emitted in application artifacts. `npm run verify` was not re-run after adding this test. None of these checks prove live providers or deployment.
 
+## D3 interface options O1–O7, UI-12, UI-13 (2026-10-30 UTC)
+
+Node 24.22.1, dependencies from `npm ci`, `CI=1`, Playwright's cached Chromium headless shell. The "before" run restores only `src/` from base `a043e80`, keeps this branch's tests and rebuilds with `npm run build:test`.
+
+| Check | Result |
+|---|---|
+| `npm run check`, fixed sources | PASS — 0 errors, 0 warnings, 0 hints |
+| `npm run build:test`, fixed sources | PASS |
+| `npm test`, fixed sources | PASS — 45/45 |
+| `npx playwright test`, fixed sources | PASS — 40/40 |
+| `npm run format:check` | PASS — all matched files use Prettier code style |
+| `npx playwright test`, base `a043e80` `src/` | Expected FAIL — 34 pass, 6 fail: 404 recovery (no `/es/contact` link), EN/ES submissions (no `Done:` prefix), mobile keyboard layout (button text `Send inquiry↗`), header current/hover (`none auto` instead of `underline 2px`), contact aside (repeats `Share your requirement…`), server email rejection (no `Error:` prefix) |
+
+`npm run verify` was not run as one aggregate command. The test build configures no contact, so the configured-contact aside intro is not exercised; the success-state appearance was not screenshotted. None of these checks prove live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.
