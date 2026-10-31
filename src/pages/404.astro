@@ -17,9 +17,13 @@ const t = messages(locale);
     <p class="eyebrow">404</p>
     <h1>{t.errors.notFound.title}</h1>
     <p class="prose">{t.errors.notFound.description}</p>
-    <a class="button" href={pathFor(locale, 'home')}>
-      {t.errors.notFound.goHome}
-      <span aria-hidden="true">↗</span>
-    </a>
+    <div class="not-found-actions">
+      <a class="button" href={pathFor(locale, 'home')}>
+        {t.errors.notFound.goHome}
+      </a>
+      <a class="button secondary" href={pathFor(locale, 'contact')}>
+        {t.footer.sections.navigation.contact}
+      </a>
+    </div>
   </section>
 </SiteLayout>

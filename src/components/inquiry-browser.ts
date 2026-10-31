@@ -29,7 +29,10 @@ function syncButton() {
     (form.elements.namedItem(name) as HTMLInputElement).disabled = pending;
 }
 function report(text: string, state: 'error' | 'success') {
-  status.textContent = text;
+  // The prefix keeps success and failure distinct without relying on colour.
+  const prefix = document.createElement('strong');
+  prefix.textContent = copy.statusPrefix[state];
+  status.replaceChildren(prefix, ` ${text}`);
   status.dataset.state = state;
 }
 function resetVerification() {
