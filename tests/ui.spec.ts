@@ -533,6 +533,23 @@ test('choosing after reopening cookie settings hands focus back to the footer co
   }
 });
 
+test('a pointer click that leaves focus on the page still hands focus back after a keyboard choice', async ({
+  page,
+}) => {
+  await page.goto('/privacy');
+  await dismissConsent(page);
+  const trigger = page.getByRole('button', { name: 'Cookie settings', exact: true });
+  // Safari does not focus a clicked button, so the click arrives while focus is still on body.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await trigger.dispatchEvent('click');
+  await expect(page.getByRole('button', { name: 'Customize', exact: true })).toBeFocused();
+  for (let step = 0; step < 2; step++) await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Reject all', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-cookie-banner]')).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
 test('language links have 24px phone targets and spoken language names', async ({ page }) => {
   for (const width of [320, 375]) {
     await page.setViewportSize({ width, height: 812 });

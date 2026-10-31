@@ -99,8 +99,12 @@ function choose(consent: Consent) {
   if (hadFocus && opener?.isConnected) opener.focus();
   opener = null;
 }
-function reopen() {
-  if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body)
+function reopen(trigger?: HTMLElement) {
+  if (trigger) opener = trigger;
+  else if (
+    document.activeElement instanceof HTMLElement &&
+    document.activeElement !== document.body
+  )
     opener = document.activeElement;
   try {
     localStorage.removeItem('cookie-consent');
@@ -135,9 +139,9 @@ customize.addEventListener('click', () => {
 document.querySelectorAll<HTMLElement>('[data-open-consent]').forEach((button) => {
   // Hidden in the HTML so visitors without JavaScript are not offered a control that does nothing.
   button.hidden = false;
-  button.addEventListener('click', reopen);
+  button.addEventListener('click', () => reopen(button));
 });
-window.addEventListener('cookie-consent:open', reopen);
+window.addEventListener('cookie-consent:open', () => reopen());
 window.addEventListener('storage', (event) => {
   if (event.key === null || event.key === 'cookie-consent') syncConsent();
 });
