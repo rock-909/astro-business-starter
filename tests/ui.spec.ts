@@ -8,6 +8,25 @@ async function mockWidget(page: Page) {
       route.fulfill({ status: 200, contentType: 'application/javascript', body: widgetScript }),
   );
 }
+// A widget still waiting for its challenge: it renders but has not produced a token yet.
+const pendingWidgetScript = `window.turnstile={render(el,options){window.__turnstileOptions=options;el.style.display='block';el.style.width=options.size==='compact'?'150px':'300px';return 'fixture-widget';},reset(){}};`;
+// The template ships without a company email; launched sites must configure one (readiness).
+// Render the configured contact blocks with a long unbreakable address, as a derived site would.
+const longEmail = 'internationalsales@guangzhouhengtaimachinery.com';
+async function withLongCompanyEmail(page: Page) {
+  await page.route('**/contact', async (route) => {
+    if (route.request().resourceType() !== 'document') return route.continue();
+    const response = await route.fetch();
+    const link = `<a href="mailto:${longEmail}">${longEmail}</a>`;
+    const html = (await response.text())
+      .replace(
+        /<p>(No business mailbox[^<]*|No se ha configurado un correo[^<]*)<\/p>/,
+        `<div class="contact-methods">${link}</div>`,
+      )
+      .replace('</form>', `</form><p class="fallback">${link}</p>`);
+    await route.fulfill({ response, body: html });
+  });
+}
 async function dismissConsent(page: Page) {
   const reject = page.getByRole('button', { name: /^(Reject all|Rechazar todo)$/ });
   if (await reject.isVisible()) await reject.click();
@@ -201,9 +220,9 @@ test('native validation keeps fields; verification load failure is explained wit
     (route) => route.abort(),
   );
   await page.reload();
-  await expect(
-    page.getByText('Security verification failed to load.', { exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('[data-verification-status]')).toHaveText(
+    'Security check did not load. Reload the page, or email us at the address on this page.',
+  );
   await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeDisabled();
 });
 
@@ -222,6 +241,21 @@ test('no-JS content, legal links, and secure fallback remain readable', async ({
   );
   await expect(page.locator('noscript .fallback')).toBeVisible();
   await expect(page.getByRole('button', { name: /Enviar consulta/ })).toBeDisabled();
+  // Nothing claims the check is broken, and the no-JS notice comes before the fields.
+  await expect(page.locator('[data-verification-status]')).toHaveText('');
+  expect(
+    await page
+      .locator('noscript:has(.fallback)')
+      .evaluate((notice) =>
+        Boolean(
+          notice.compareDocumentPosition(document.querySelector('form[data-inquiry-form]')!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+      ),
+  ).toBe(true);
+  // Script-only footer controls are not offered when they cannot work.
+  await expect(page.getByRole('button', { name: 'Configuración de cookies' })).toBeHidden();
+  await expect(page.locator('[data-theme-select]')).toBeHidden();
   await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
   await page.getByRole('link', { name: 'Política de privacidad', exact: true }).first().click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
@@ -248,13 +282,116 @@ test('mobile layout is keyboard usable and has no horizontal overflow', async ({
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toHaveCount(1);
   await expect(page.getByLabel('Full name', { exact: true })).toBeVisible();
-  await expect(page.locator('.privacy-notice')).toContainText(
-    'Service. Privacy Policy · Terms of Service',
+  await expect(page.locator('.privacy-notice')).toHaveText(
+    'By submitting this form, you agree to our Privacy Policy and Terms of Service.',
   );
+  await expect(page.locator('.privacy-notice a')).toHaveText([
+    'Privacy Policy',
+    'Terms of Service',
+  ]);
+  await expect(page.locator('[data-submit]')).toHaveText(/^Send inquiry\s*↗$/);
   await page.screenshot({ path: 'test-results/contact-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });
+});
+
+test('a long company email fits phone widths, keeps the compact widget and keeps form-first Tab order', async ({
+  page,
+}) => {
+  await withLongCompanyEmail(page);
+  for (const width of [320, 375]) {
+    for (const path of ['/contact', '/es/contact']) {
+      await page.setViewportSize({ width, height: 812 });
+      await page.goto(path);
+      await dismissConsent(page);
+      await expect(page.locator('.contact-methods a')).toHaveText(longEmail);
+      await expect(page.locator('[data-turnstile] button')).toHaveCount(1);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        `${path} at ${width}px`,
+      ).toBe(true);
+      expect(
+        await page.evaluate(
+          () => (window as unknown as { __turnstileOptions: { size?: string } }).__turnstileOptions,
+        ),
+      ).toMatchObject({ size: 'compact' });
+    }
+  }
+  // Phone: the form is shown first, so keyboard focus must reach it before the contact links.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/contact');
+  await dismissConsent(page);
+  const fullName = page.getByLabel('Full name', { exact: true });
+  const asideEmail = page.locator('.contact-methods a');
+  expect((await fullName.boundingBox())!.y).toBeLessThan((await asideEmail.boundingBox())!.y);
+  const order: string[] = [];
+  for (let presses = 0; presses < 40 && order.length < 2; presses++) {
+    await page.keyboard.press('Tab');
+    if (await fullName.evaluate((field) => field === document.activeElement)) order.push('form');
+    if (await asideEmail.evaluate((link) => link === document.activeElement)) order.push('aside');
+  }
+  expect(order).toEqual(['form', 'aside']);
+  // Wide screens keep the direct contact column on the left of the form.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect((await asideEmail.boundingBox())!.x).toBeLessThan((await fullName.boundingBox())!.x);
+});
+
+test('long words in headings wrap at 320px instead of widening the page', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  for (const [path, level] of [
+    ['/es', 1],
+    ['/es/contact', 2],
+  ] as const) {
+    await page.goto(path);
+    await dismissConsent(page);
+    await page
+      .getByRole('heading', { level })
+      .first()
+      .evaluate((heading) => (heading.textContent = 'Telecomunicaciones industriales'));
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      path,
+    ).toBe(true);
+  }
+});
+
+test('security check reads as loading, then stays quiet while the challenge waits', async ({
+  page,
+}) => {
+  for (const [path, loading, unavailable] of [
+    ['/contact', 'Loading security check', 'temporarily unavailable'],
+    ['/es/contact', 'Cargando la verificación de seguridad', 'no está disponible'],
+  ]) {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.unroute('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit');
+    await page.route(
+      'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit',
+      async (route) => {
+        await held;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/javascript',
+          body: pendingWidgetScript,
+        });
+      },
+    );
+    // The held widget script delays the load event; the page is usable once parsed.
+    await page.goto(path!, { waitUntil: 'domcontentloaded' });
+    const status = page.locator('[data-verification-status]');
+    await expect(status).toContainText(loading!);
+    release();
+    await expect.poll(() => page.evaluate(() => '__turnstileOptions' in window)).toBe(true);
+    await expect(status).toHaveText('');
+    await expect(page.locator('[data-submit]')).toBeDisabled();
+    await page.evaluate(() =>
+      (window as unknown as { __turnstileOptions: Record<string, () => void> }).__turnstileOptions[
+        'error-callback'
+      ]!(),
+    );
+    await expect(status).toContainText(unavailable!);
+  }
 });
 
 test('on a phone, every Tab stop up to the footer stays clear of the open cookie card', async ({
@@ -377,7 +514,10 @@ test('pending submission locks buyer edits and duplicate Enter, then clears only
     if (request.url().includes('/_actions/inquiry')) submissions.push(request.url());
   });
   await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sending...', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Sending…', exact: true })).toBeDisabled();
+  // Screen readers hear the wait, and focus is kept on the announcement instead of the page body.
+  await expect(page.locator('[data-form-status]')).toHaveText('Sending…');
+  await expect(page.locator('[data-form-status]')).toBeFocused();
   await expect(page.getByLabel('Full name', { exact: true })).toBeDisabled();
   await expect(page.getByLabel('Email address', { exact: true })).toBeDisabled();
   await expect(page.getByLabel(/Message \(optional\)/)).toBeDisabled();
@@ -413,6 +553,9 @@ test('unconfirmed delivery keeps draft and retries only after explicit buyer act
   await page.getByLabel('Email address', { exact: true }).fill('retry@example.test');
   await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
   await expect(page.locator('[data-form-status]')).toContainText('may have been received');
+  await expect(page.locator('[data-form-status]')).toContainText(
+    'email us at the address on this page',
+  );
   await expect(page.getByLabel('Full name', { exact: true })).toHaveValue('Retry Buyer');
   await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeDisabled();
   expect(
@@ -459,7 +602,9 @@ test('rate-limit cooldown blocks repeat submit until elapsed and still needs fre
   await page.getByLabel('Full name', { exact: true }).fill('Rate Buyer');
   await page.getByLabel('Email address', { exact: true }).fill('rate@example.test');
   await page.getByRole('button', { name: 'Send inquiry', exact: true }).click();
-  await expect(page.locator('[data-form-status]')).toContainText('Too many attempts');
+  await expect(page.locator('[data-form-status]')).toContainText(
+    'Too many attempts. Wait about a minute',
+  );
   await page.getByRole('button', { name: '[Test] Complete verification', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Send inquiry', exact: true })).toBeDisabled();
   await page.locator('[data-inquiry-form]').dispatchEvent('submit');

@@ -83,16 +83,17 @@
       "message": "Message",
       "messageHint": "Share your requirement, timing, market or any useful context.",
       "submit": "Send inquiry",
-      "submitting": "Sending...",
+      "submitting": "Sending…",
       "success": "Received. The team can review your inquiry and respond with the next useful step or the details still needed.",
       "referenceLabel": "Reference",
-      "privacyNotice": "By submitting this form, you agree to our Privacy Policy and Terms of Service.",
+      "privacyNotice": "By submitting this form, you agree to our {privacy} and {terms}.",
       "noJsExplanation": "The secure inquiry form needs JavaScript because bot verification cannot run without it.",
       "noJsEmailPrefix": "Email us directly at",
       "contactAriaLabel": "Contact inquiry",
       "turnstile": {
-        "unavailable": "Security verification is temporarily unavailable.",
-        "loadFailed": "Security verification failed to load.",
+        "loading": "Loading security check…",
+        "unavailable": "Security verification is temporarily unavailable. Try again in a few minutes, or email us at the address on this page.",
+        "loadFailed": "Security check did not load. Reload the page, or email us at the address on this page.",
         "expired": "Security verification expired. Please complete it again.",
         "rescueAfterEmail": "Include your requirement and contact details."
       },
@@ -113,12 +114,12 @@
           "invalid": "Message contains invalid characters",
           "tooLong": "Message must be 2000 characters or fewer"
         },
-        "rateLimitSummary": "Too many attempts. Please wait before sending your inquiry again.",
+        "rateLimitSummary": "Too many attempts. Wait about a minute, then send your inquiry again.",
         "rateLimitReady": "You can send your inquiry again now."
       },
       "title": "Start an inquiry",
       "website": "Website",
-      "unknown": "We could not confirm the result. Your inquiry may have been received. Your details are kept below; retrying may create a duplicate. You can retry with a new verification or use a configured contact method.",
+      "unknown": "We could not confirm the result. Your inquiry may have been received. Your details are kept below; retrying may create a duplicate. You can retry with a new verification, or if you don't hear back, email us at the address on this page.",
       "localePending": "Wait for the inquiry result before switching language.",
       "localeStorageUnavailable": "Your browser cannot preserve this draft across a language change. Copy or clear your details before switching."
     }

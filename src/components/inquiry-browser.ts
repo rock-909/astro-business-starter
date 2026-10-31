@@ -13,6 +13,7 @@ const globals = window as unknown as { turnstile?: Turnstile };
 const form = document.querySelector<HTMLFormElement>('[data-inquiry-form]')!;
 const copy: Copy = JSON.parse(form.dataset.copy!);
 const submit = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+const submitLabel = submit.querySelector<HTMLElement>('[data-submit-label]')!;
 const status = form.querySelector<HTMLElement>('[data-form-status]')!;
 const verification = form.querySelector<HTMLElement>('[data-verification-status]')!;
 const siteKey = form.dataset.siteKey || '';
@@ -22,7 +23,7 @@ let pending = false;
 let cooldownUntil = 0;
 function syncButton() {
   submit.disabled = pending || !token || Date.now() < cooldownUntil;
-  submit.textContent = pending ? copy.submitting : copy.submit;
+  submitLabel.textContent = pending ? copy.submitting : copy.submit;
   form.setAttribute('aria-busy', String(pending));
   for (const name of ['fullName', 'email', 'message'])
     (form.elements.namedItem(name) as HTMLInputElement).disabled = pending;
@@ -109,12 +110,15 @@ function renderWidget() {
         syncButton();
       },
     });
+    // The widget is on screen and prompts for itself; only failures need words here.
+    if (verification.textContent === copy.turnstile.loading) verification.textContent = '';
   } catch {
     verification.textContent = copy.turnstile.unavailable;
   }
 }
-if (siteKey) {
-  verification.textContent = copy.turnstile.unavailable;
+if (!siteKey) verification.textContent = copy.turnstile.unavailable;
+else {
+  verification.textContent = copy.turnstile.loading;
   const script = document.createElement('script');
   script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
   script.async = true;
@@ -165,7 +169,10 @@ form.addEventListener('submit', async (event) => {
     return;
   }
   pending = true;
-  status.textContent = '';
+  // Announce the wait and keep focus off <body> while the button and fields are disabled.
+  status.textContent = copy.submitting;
+  delete status.dataset.state;
+  if (form.contains(document.activeElement)) status.focus();
   syncButton();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

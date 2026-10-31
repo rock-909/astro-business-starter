@@ -215,6 +215,11 @@ h3,
 p {
   margin-top: 0;
 }
+h1,
+h2 {
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
 h1 {
   font-size: clamp(44px, 6vw, 78px);
   line-height: 1.06;
@@ -332,6 +337,8 @@ p {
   align-items: start;
 }
 .contact-aside {
+  /* The form comes first in the DOM (phone reading and Tab order); wide screens show this column on the left. */
+  order: -1;
   border-top: 1px solid var(--border);
   padding-top: 28px;
 }
@@ -345,6 +352,10 @@ p {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.contact-methods a,
+.fallback a {
+  overflow-wrap: anywhere;
 }
 .contact-methods address {
   font-style: normal;
@@ -613,11 +624,11 @@ input[type='checkbox'] {
     padding-top: 26px;
   }
   .contact-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 28px;
   }
   .contact-aside {
-    order: 2;
+    order: 0;
   }
   .inquiry-card {
     padding: 24px;
