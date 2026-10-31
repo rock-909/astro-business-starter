@@ -23,17 +23,19 @@ No project-wide open-source license is assigned in this repository. Publication 
 
 The lockfile retains the complete dependency tree, registry locations, integrity hashes and declared license metadata. Dependencies are installed separately; their code/binaries are not bundled in the source archive. Preserve their upstream license and notice files when distributing installed dependencies or built artifacts.
 
-| Package | Pinned version | Declared upstream license |
-|---|---|---|
-| astro | 7.4.2 | MIT |
-| @astrojs/cloudflare | 14.4.2 | MIT |
-| @astrojs/check | 0.9.12 | MIT |
-| @emnapi/runtime (peer required by `@astrojs/check`'s WASM runtime) | 1.11.3 | MIT |
-| @playwright/test | 1.64.1 | Apache-2.0 |
-| typescript | 6.0.3 | Apache-2.0 |
-| wrangler | 4.153.0 | MIT OR Apache-2.0 |
-| miniflare (Wrangler transitive) | 5.20261023.0-beta | MIT |
-| workerd (Miniflare transitive) | 1.20261023.1 | Apache-2.0 |
+Exact installed versions, including transitive ones, are recorded in `package-lock.json`; this table names the main packages and their declared licenses, not versions.
+
+| Package | Declared upstream license |
+|---|---|
+| astro | MIT |
+| @astrojs/cloudflare | MIT |
+| @astrojs/check | MIT |
+| @emnapi/runtime (peer required by `@astrojs/check`'s WASM runtime) | MIT |
+| @playwright/test | Apache-2.0 |
+| typescript | Apache-2.0 |
+| wrangler | MIT OR Apache-2.0 |
+| miniflare (Wrangler transitive) | MIT |
+| workerd (Miniflare transitive) | Apache-2.0 |
 
 Local browser verification used Chromium headless-shell 153.0.8010.0 supplied by `@sparticuz/chromium` 153.0.0. Neither that tooling nor its binaries are part of this project's dependency graph or source archive; Chromium has its own upstream notices.
 
