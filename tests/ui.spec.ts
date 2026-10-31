@@ -36,8 +36,10 @@ async function withLongCompanyEmail(page: Page, site: Site) {
       )
       .find((paragraph) => html.includes(paragraph));
     const configured = /<div class="contact-methods">[\s\S]*?<\/div>/;
-    if (unconfigured) html = html.replace(unconfigured, methods);
-    else if (configured.test(html)) html = html.replace(configured, methods);
+    if (configured.test(html)) {
+      html = html.replace(configured, methods);
+      if (unconfigured) html = html.replace(unconfigured, '');
+    } else if (unconfigured) html = html.replace(unconfigured, methods);
     else html = html.replace('</aside>', `${methods}</aside>`);
     if (!/class="fallback"[^>]*>[^<]*<a href="mailto:/.test(html))
       html = html.replace('</form>', `</form><p class="fallback">${link}</p>`);
