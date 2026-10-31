@@ -16,20 +16,32 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { assertValidSiteConfig } from '../src/site-schema.ts';
-import { readinessIssues } from '../scripts/readiness.mjs';
+import { launchEnv, readinessIssues } from '../scripts/readiness.mjs';
 import { startHarness } from './harness.mjs';
 
 const identity = JSON.parse(
   readFileSync(new URL('../src/site-data.json', import.meta.url), 'utf8'),
 );
-// Owner-rewritten copy for every template phrase a derived site must replace before launch.
+// Owner-rewritten copy for every template phrase a derived site must replace before launch,
+// plus its own share image and Worker name.
 const launchCopy = 'Owner approved copy';
 function writeLaunchCopy(root) {
+  writeFileSync(join(root, 'public/opengraph-image.png'), 'owner share image');
+  const wrangler = join(root, 'wrangler.jsonc');
+  writeFileSync(
+    wrangler,
+    readFileSync(wrangler, 'utf8').replace(
+      '"name": "astro-business-starter"',
+      '"name": "configured-business"',
+    ),
+  );
   for (const locale of ['en', 'es']) {
     const file = join(root, `src/content/${locale}/messages.json`);
     const messages = JSON.parse(readFileSync(file, 'utf8'));
     messages.home.metadata.description = launchCopy;
+    messages.home.title = launchCopy;
     messages.home.description = launchCopy;
+    messages.home.ruleLabel = launchCopy;
     messages.home.eyebrow = launchCopy;
     messages['structured-data'].website.description = launchCopy;
     messages.navigation.siteDescription = launchCopy;
@@ -219,6 +231,12 @@ test('readiness rejects shipped template copy and accepts owner-rewritten copy',
     seo: identity.seo,
   });
   for (const issue of [
+    "wrangler.jsonc name must be this site's own Worker name, not astro-business-starter",
+    'brandAssets.ogImage /opengraph-image.png is still the template share image',
+    'en/messages home.title still contains template copy',
+    'en/messages home.ruleLabel still contains template copy',
+    'es/messages home.title still contains template copy',
+    'es/messages home.ruleLabel still contains template copy',
     'seo.titleTemplate still contains template copy',
     'seo.defaultDescription still contains template copy',
     'en/messages home.metadata.description still contains template copy',
@@ -245,6 +263,7 @@ test('readiness rejects shipped template copy and accepts owner-rewritten copy',
   try {
     cpSync(resolve('src/content'), join(fixture, 'src/content'), { recursive: true });
     cpSync(resolve('public'), join(fixture, 'public'), { recursive: true });
+    cpSync(resolve('wrangler.jsonc'), join(fixture, 'wrangler.jsonc'));
     writeLaunchCopy(fixture);
     assert.deepEqual(
       readinessIssues(productionPrerequisites, launchIdentity, pathToFileURL(`${fixture}/`)),
@@ -269,7 +288,7 @@ test('readiness rejects a founding year later than the current year', () => {
 test('readiness rejects configured root-relative brand files missing from public/', () => {
   const issues = (brandAssets) =>
     readinessIssues({}, { ...identity, brandAssets }).filter((issue) =>
-      issue.startsWith('brandAssets.'),
+      issue.endsWith('does not exist under public/'),
     );
   const logo = { status: 'ready', width: 200, height: 40 };
   assert.deepEqual(
@@ -295,6 +314,41 @@ test('readiness rejects configured root-relative brand files missing from public
   assert.deepEqual(issues({ ...identity.brandAssets, favicon: '/../package.json' }), [
     'brandAssets.favicon /../package.json does not exist under public/',
   ]);
+});
+
+test('both launch gates read Wrangler vars, mode dotenv files and the shell, never .dev.vars', () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'astro-env-'));
+  try {
+    writeFileSync(
+      join(fixture, 'wrangler.jsonc'),
+      `{
+        // Deployed plain vars; a PUBLIC_* copy here is runtime-only, not the rendered value.
+        "name": "configured-business",
+        "vars": {
+          "TURNSTILE_ALLOWED_HOSTS": "https://supplier.co.uk",
+          "AIRTABLE_TABLE_NAME": "Vars table",
+          "PUBLIC_SITE_URL": "https://vars.supplier.co.uk",
+        },
+      }`,
+    );
+    writeFileSync(
+      join(fixture, '.env.production'),
+      'AIRTABLE_TABLE_NAME=Dotenv table\nRESEND_API_KEY=from-dotenv\n',
+    );
+    writeFileSync(join(fixture, '.dev.vars'), 'RESEND_API_KEY=\nRATE_LIMIT_PEPPER=from-dev-vars\n');
+    const env = launchEnv(
+      'production',
+      { RESEND_API_KEY: 'from-shell' },
+      pathToFileURL(`${fixture}/`),
+    );
+    assert.equal(env.TURNSTILE_ALLOWED_HOSTS, 'https://supplier.co.uk');
+    assert.equal(env.AIRTABLE_TABLE_NAME, 'Dotenv table');
+    assert.equal(env.RESEND_API_KEY, 'from-shell');
+    assert.equal(env.PUBLIC_SITE_URL, undefined);
+    assert.equal(env.RATE_LIMIT_PEPPER, undefined);
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 test('real Astro builds use dotenv, mode files and shell precedence for launch readiness', async (suite) => {
@@ -334,6 +388,38 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
         PUBLIC_APP_ENV: 'experiment',
         PUBLIC_SITE_URL: 'https://shell.supplier.co.uk',
       },
+      blocked: false,
+    },
+    {
+      name: 'a PUBLIC_APP_ENV variant is refused instead of building a noindex site',
+      files: { '.env': 'PUBLIC_APP_ENV=Production\n' },
+      blocked: /PUBLIC_APP_ENV must be production or experiment, not "Production"/,
+    },
+    {
+      name: 'a Wrangler var the deploy would ship reaches the production gate',
+      files: {
+        '.env': Object.entries(productionPrerequisites)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n'),
+        'wrangler.jsonc': JSON.stringify({
+          name: 'configured-business',
+          compatibility_date: '2026-10-19',
+          compatibility_flags: ['nodejs_compat'],
+          vars: { TURNSTILE_ALLOWED_HOSTS: 'other.co.uk' },
+        }),
+      },
+      ready: true,
+      blocked: /TURNSTILE_ALLOWED_HOSTS must include the public site hostname/,
+    },
+    {
+      name: 'blank local .dev.vars do not hide production values from the gate',
+      files: {
+        '.env': Object.entries(productionPrerequisites)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n'),
+        '.dev.vars': 'TURNSTILE_SECRET_KEY=\nRATE_LIMIT_PEPPER=\n',
+      },
+      ready: true,
       blocked: false,
     },
     {
@@ -403,7 +489,10 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
         const output = result.stdout + result.stderr;
         if (scenario.blocked) {
           assert.notEqual(result.status, 0, output);
-          assert.match(output, /Production build blocked/);
+          assert.match(
+            output,
+            scenario.blocked === true ? /Production build blocked/ : scenario.blocked,
+          );
           assert.ok(!existsSync(join(fixture, 'dist/client/index.html')));
         } else {
           assert.equal(result.status, 0, output);

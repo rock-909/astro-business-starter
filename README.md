@@ -45,6 +45,8 @@ npm run test:browser
 |---|---|
 | `src/site-data.json` | 名称、公开联系/社交、品牌资源、SEO、身份/法律确认标记 |
 | `src/content/en`、`src/content/es` | 双语文案、联系与法律正文 |
+| `public/` | 品牌文件：分享图 `opengraph-image.png`（模板图写着 “Non-production reference site”）、图标与 Logo |
+| `wrangler.jsonc` | 本站唯一的 Worker `name`、正式域名路由、关闭 `workers_dev`/`preview_urls`（见 LAUNCH 第 4 节） |
 | `src/styles/global.css` | 设计 token、响应式布局、焦点与主题样式 |
 | `.env.example` | 公开域名、Turnstile site key、可选 GA 与搜索验证配置 |
 | `.dev.vars.example` | 服务端绑定名称；不要提交真实 secret |
@@ -59,7 +61,7 @@ npm run readiness
 PUBLIC_APP_ENV=production npm run build
 ```
 
-默认占位身份、模板文案、所配品牌文件缺失及缺失配置会让这两项检查**拒绝上线**；通过也不能证明凭证有效、Cloudflare 已绑定、邮件到达、CRM 持久化或部署成功。本项目没有自动部署流程。上线步骤、Worker bindings、供应商与域名设置、上线证据和交接见 [LAUNCH.md](LAUNCH.md)。
+默认占位身份、模板文案、模板 Worker 名、模板分享图、所配品牌文件缺失及缺失配置会让这两项检查**拒绝上线**；通过也不能证明凭证有效、Cloudflare 已绑定、邮件到达、CRM 持久化或部署成功。本项目没有自动部署流程。上线步骤、Worker bindings、供应商与域名设置、上线证据和交接见 [LAUNCH.md](LAUNCH.md)。
 
 ## 关键行为
 

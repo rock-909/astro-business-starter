@@ -59,11 +59,12 @@ test('all eight source pages have localized HTML, reciprocal SEO and truthful no
   for (const [path, locale, heading] of definitions) {
     const response = await page.goto(path!);
     expect(response?.status()).toBe(200);
+    expect(response?.request().redirectedFrom()).toBeNull();
     await expect(page.locator('html')).toHaveAttribute('lang', locale!);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading!);
     expect(await page.locator('main').count()).toBe(1);
     const canonical = await page.locator('link[rel=canonical]').getAttribute('href');
-    expect(new URL(canonical!).pathname.replace(/\/$/, '') || '/').toBe(path);
+    expect(new URL(canonical!).pathname).toBe(path);
     await expect(page.locator('link[hreflang=en]')).toHaveCount(1);
     await expect(page.locator('link[hreflang=es]')).toHaveCount(1);
     await expect(page.locator('link[hreflang=x-default]')).toHaveCount(1);

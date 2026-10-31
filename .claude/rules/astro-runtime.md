@@ -27,5 +27,5 @@ paths:
 - **DEFAULT** 保留现有 `session: false`、图片 passthrough 和兼容日期；仅为真实功能需求改变。若新增平台绑定，类型须与 Wrangler 配置一致；优先现有 Wrangler 的类型生成，不另造运行时类型体系。
 
 理由：预渲染成功不证明 Worker 可运行；静态资源头不会自动覆盖 Worker 响应。
-验证：`npm run check`、测试构建后的 workerd Action/静态响应测试；配置变化核对 `tests/harness.mjs` 的兼容日期、flags、绑定，不新加第二套模拟器。
+验证：`npm run check`、测试构建后的 workerd Action/静态响应测试；`tests/harness.mjs` 从生成的 `dist/server/wrangler.json` 读取兼容日期、flags 与 assets 设置，配置变化时核对它的绑定，不新加第二套模拟器。
 依据：[Astro Cloudflare adapter](https://docs.astro.build/en/guides/integrations-guide/cloudflare/)、[环境变量](https://docs.astro.build/en/guides/environment-variables/)、[Worker 类型](https://developers.cloudflare.com/workers/languages/typescript/)。

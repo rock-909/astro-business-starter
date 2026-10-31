@@ -580,8 +580,16 @@ test('static assets, SEO endpoints, health, 404 and client secret boundary', asy
       '/es/privacy',
       '/es/terms',
     ]) {
-      const response = await h.mf.dispatchFetch(`http://localhost${path}`);
-      assert.equal(response.status, 200);
+      // Canonical, hreflang and sitemap URLs must answer 200 themselves, not via a redirect.
+      const response = await h.mf.dispatchFetch(`http://localhost${path}`, { redirect: 'manual' });
+      assert.equal(response.status, 200, `${path} must not redirect`);
+      if (path !== '/') {
+        const slashed = await h.mf.dispatchFetch(`http://localhost${path}/`, {
+          redirect: 'manual',
+        });
+        assert.equal(slashed.status, 307);
+        assert.equal(new URL(slashed.headers.get('location'), 'http://localhost').pathname, path);
+      }
       assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
       assertIsolationHeaders(response);
       const html = await response.text();

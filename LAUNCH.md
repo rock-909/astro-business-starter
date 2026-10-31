@@ -5,7 +5,8 @@
 ## 1. 替换内容并通过静态门禁
 
 1. 按 [README.md](README.md) 的“派生站点改哪里”替换身份、域名、联系方式、品牌文件和 EN/ES 文案，审阅双语法律正文后才把 `src/site-data.json` 的 `readiness` 标记改为 `true`。
-2. 运行：
+2. 把 `wrangler.jsonc` 的 `name` 改成本站在 Cloudflare 账户内唯一的 Worker 名。Cloudflare 按“账户 + Worker 名”识别 Worker：沿用模板名 `astro-business-starter` 时，同一账户里另一个派生站的部署会替换这个站的代码、域名和 `vars`，并沿用它的 secret。
+3. 运行：
 
    ```sh
    npm run verify
@@ -13,7 +14,15 @@
    PUBLIC_APP_ENV=production npm run build
    ```
 
-`readiness` 会拒绝：缺失或哨兵配置值、模板身份、未完成的法律文案、`messages.json` 与 `contact.ts` 里残留的模板措辞（如 “non-production”“Inquiry site reference”“sitio de referencia”），以及 `public/` 下不存在的根相对品牌文件（`brandAssets.ogImage`、`brandAssets.favicon`、`brandAssets.logo.horizontal`）。通过只说明配置前提齐全，不证明凭证有效、绑定已到 Cloudflare 或邮件已送达。
+`readiness` 会拒绝：缺失或哨兵配置值、模板 Worker 名、模板身份、未完成的法律文案、`messages.json` 与 `contact.ts` 里残留的模板措辞（如 “non-production”“Inquiry site”“Sitio de consultas”“EN / ES”“sitio de referencia”）、`public/` 下不存在的根相对品牌文件（`brandAssets.ogImage`、`brandAssets.favicon`、`brandAssets.logo.horizontal`），以及仍是模板分享图（图上写着 “Non-production reference site”）的 `brandAssets.ogImage`。`PUBLIC_APP_ENV` 只接受 `production` 或 `experiment`，`Production`、`prod` 等写法会让构建直接失败。通过只说明配置前提齐全，不证明凭证有效、绑定已到 Cloudflare 或邮件已送达。
+
+4. 部署：
+
+   ```sh
+   PUBLIC_APP_ENV=production npm run build && npx wrangler deploy
+   ```
+
+   `wrangler deploy` 上传 `dist/` 里现有的构建（读取生成的 `dist/server/wrangler.json`）。`npm run verify` 会在 `dist/` 写入带测试 widget key、noindex 的测试构建，生产构建被门禁拦下时它仍留在那里，所以只用 `&&` 把部署接在一次成功的生产构建之后，不要单独执行 `wrangler deploy`。
 
 ## 2. Worker 配置放在哪里
 
@@ -26,16 +35,29 @@
 
 名称以 `.dev.vars.example` 为准。`TURNSTILE_ALLOWED_HOSTS` 写主机名，用逗号分隔（如 `supplier.com,www.supplier.com`）；同时用 apex 和 `www` 提供站点时两个都要列。写成 `https://` 网址、带端口或用分号、空格分隔时只取主机名；无法识别的条目被忽略，`readiness` 能看到这个值时会拒绝它们。若 `TURNSTILE_ALLOWED_HOSTS`、`PUBLIC_SITE_URL`、`RESEND_FROM_EMAIL`、`INQUIRY_TO_EMAIL`、`AIRTABLE_BASE_ID` 或 `AIRTABLE_TABLE_NAME` 被一次部署清空，询盘就会停止：允许的主机名为空（或全部无法识别）时每次提交都返回 `TURNSTILE_UNAVAILABLE`，日志为 `inquiry.turnstile_unavailable` 且 `reason: "configuration"`；两个交付通道都缺配置时返回 `DELIVERY_UNCONFIRMED`。部署后用 `npx wrangler secret list` 和当前版本的绑定列表核对。
 
-`PUBLIC_*` 构建值（`PUBLIC_APP_ENV`、`PUBLIC_SITE_URL`、`PUBLIC_TURNSTILE_SITE_KEY`、`PUBLIC_GA_MEASUREMENT_ID`、搜索验证值）在构建时写入页面，来自构建机的 shell 或 `.env.production`，见 `.env.example`；不要把 secret 放进 `PUBLIC_*`。`readiness` 同样要求服务端值在检查进程中可见，那只是本地检查，不会替你绑定到 Cloudflare。
+`PUBLIC_*` 构建值（`PUBLIC_APP_ENV`、`PUBLIC_SITE_URL`、`PUBLIC_TURNSTILE_SITE_KEY`、`PUBLIC_GA_MEASUREMENT_ID`、搜索验证值）在构建时写入页面，来自构建机的 shell 或 `.env.production`，见 `.env.example`；不要把 secret 放进 `PUBLIC_*`。
+
+`npm run readiness` 和生产构建的门禁读取同一组来源，按以下顺序，后面的覆盖前面的：`wrangler.jsonc` 的 `vars`（不含 `PUBLIC_*`）、`.env`/`.env.production` 等 mode 文件、构建机 shell。`.dev.vars` 只供本地开发，两个门禁都不读。secret 不在这些来源里，门禁要求它们以同名值出现在 shell 或 `.env.production` 中；那只是本地检查，不会替你绑定到 Cloudflare，也看不到 `wrangler secret put` 的实际值。
 
 ## 3. 预览与生产分开
 
 - 预览与生产使用各自的 Upstash 数据库和 Airtable base/table，各自的 `APP_ENV`（限流键以它为前缀）。预览测试不能写入生产 CRM 或联系真实客户。
 - Turnstile、Resend 可以同账号，但预览的主机名和收件箱要与生产分开登记。
+- 预览要用独立的 Worker：在 `wrangler.jsonc` 加 `env.preview`，给它自己的 `name`、`vars` 和路由。`env.preview` 的 `vars` 只到达 Worker 运行时，不改变写进页面的 `PUBLIC_*` 值，所以预览的公开构建值要放进独立的 `.env.preview`：`PUBLIC_APP_ENV=experiment`、预览域名的 `PUBLIC_SITE_URL` 和预览 Turnstile widget 的 `PUBLIC_TURNSTILE_SITE_KEY`。环境和 mode 都在构建时选定，用 `CLOUDFLARE_ENV=preview npm run build -- --mode preview && npx wrangler deploy` 部署（不要给 `wrangler deploy` 加 `--env`）；不带 `--mode preview` 时构建会读取 `.env.production`，把生产域名、可索引的 robots 和生产分析配置写进预览页面。secret 用 `npx wrangler secret put <NAME> --name <预览 Worker 名>` 单独设置。Workers 自带的版本预览 URL 用的是生产 Worker 的 secret 和 `vars`，不算独立预览。
 
 ## 4. 供应商与域名
 
-**Airtable。** 表的列名必须与 [BUSINESS-CONTRACT.md](BUSINESS-CONTRACT.md) “External schema” 一行完全一致：`Email`、`Submitted At`、`Status`、`Source`、`First Name`、`Last Name`、`Message`、`Reference ID`，以及可选的 `Requirements`、`UTM Source`、`UTM Medium`、`UTM Campaign`、`UTM Term`、`UTM Content`、`Landing Page`、`Captured At`。缺一列或拼写不同，Airtable 返回 422，整条记录不写入；邮件仍成功，所以买家看到成功，CRM 通道却悄悄丢失。唯一迹象是日志里的 `inquiry.airtable_acceptance_unconfirmed` 和 `inquiry.accepted` 中的 `recordAccepted: false`。
+**Airtable。** 下表的 16 列都必须建好，列名与 [BUSINESS-CONTRACT.md](BUSINESS-CONTRACT.md) “External schema” 一行完全一致。后 8 列不是每条记录都写，但一旦写入时缺列，整条记录同样被拒：
+
+| 列 | 何时写入 | 值 |
+| --- | --- | --- |
+| `Email`、`Submitted At`、`First Name`、`Last Name`、`Message`、`Reference ID` | 每条询盘 | 买家输入、ISO 时间与参考号 |
+| `Status` | 每条询盘 | 固定 `New` |
+| `Source` | 每条询盘 | 固定 `Website Inquiry` |
+| `Requirements` | 买家填写了留言 | 留言原文 |
+| `UTM Source`、`UTM Medium`、`UTM Campaign`、`UTM Term`、`UTM Content`、`Landing Page`、`Captured At` | 访客同意分析且带有该归因值 | 对应归因值 |
+
+建议都建成文本列。`Status`、`Source` 若建成单选列，必须预先包含 `New` 和 `Website Inquiry` 这两个选项：请求不带 `typecast`，Airtable 不会自动新建选项。缺一列、拼写不同或单选缺选项时，Airtable 返回 422，整条记录不写入；邮件仍成功，所以买家看到成功，CRM 通道却悄悄丢失。唯一迹象是日志里的 `inquiry.airtable_acceptance_unconfirmed` 和 `inquiry.accepted` 中的 `recordAccepted: false`。
 
 **Turnstile。** 在 Turnstile widget 的主机名列表里加入正式域名；`TURNSTILE_ALLOWED_HOSTS` 必须包含 `PUBLIC_SITE_URL` 的主机名。主机名不匹配时提交被拒，日志为 `inquiry.turnstile_rejected` 且 `reason: "invalid-hostname"`，这是区分主机配置错误的唯一信号。
 
@@ -43,7 +65,15 @@
 
 **Resend。** 先在 Resend 验证 `RESEND_FROM_EMAIL` 所在的发信域名（SPF/DKIM），再用正式域名提交一条合成询盘，确认它确实进入 `INQUIRY_TO_EMAIL` 收件箱（而非垃圾箱）。Resend 显示已接受只代表供应商接收，不代表收件箱到达。
 
-**自定义域名与 TLS。** 把 Worker 绑定到正式域名并确认证书生效，`PUBLIC_SITE_URL` 与之一致。模板对每个响应发送 `Strict-Transport-Security: max-age=31536000`，只约束提供站点的那个主机名：浏览器经 HTTPS 访问一次后，一年内不再用 HTTP 访问它，所以上线前先确认该主机名只走 HTTPS。是否加 `includeSubDomains`/`preload`，由域名所有者按整个域名的情况决定——`preload` 会约束所有子域名且难以撤回；要改时同步修改 `public/_headers` 与 `src/security-headers.ts` 两份响应头。
+**自定义域名与 TLS。** 在 `wrangler.jsonc` 里声明正式域名，并关掉 Worker 的公开副本（模板里有注释示例）：
+
+```jsonc
+"routes": [{ "pattern": "www.example.com", "custom_domain": true }],
+"workers_dev": false,
+"preview_urls": false,
+```
+
+只在面板里绑定域名时，配置里没有路由，`wrangler deploy` 会保持 `<name>.<账户子域>.workers.dev` 公开一份完整的生产站（买家在那里提交会被 Turnstile 主机名检查拒绝），版本预览 URL 也默认开启。部署后确认证书生效，`PUBLIC_SITE_URL` 与正式域名一致。模板对每个响应发送 `Strict-Transport-Security: max-age=31536000`，只约束提供站点的那个主机名：浏览器经 HTTPS 访问一次后，一年内不再用 HTTP 访问它，所以上线前先确认该主机名只走 HTTPS。是否加 `includeSubDomains`/`preload`，由域名所有者按整个域名的情况决定——`preload` 会约束所有子域名且难以撤回；要改时同步修改 `public/_headers` 与 `src/security-headers.ts` 两份响应头。
 
 ## 5. 搜索、分析与爬虫
 
@@ -67,7 +97,7 @@
 
 以下每一层都有证据才算正式上线，缺任何一层都只能说“已部署”：
 
-1. **静态门禁**：`npm run verify`、`npm run readiness`、`PUBLIC_APP_ENV=production npm run build` 均通过。
+1. **静态门禁**：`npm run verify`、`npm run readiness`、`PUBLIC_APP_ENV=production npm run build` 均通过，部署的是这次生产构建（第 1 节第 4 步）。
 2. **Cloudflare 绑定**：第 2 节列出的值都在当前部署版本中（`wrangler secret list` 与版本绑定），没有面板普通变量。
 3. **供应商接收**：从正式域名提交一条合成询盘，买家看到参考号，日志中 `inquiry.accepted` 的 `emailAccepted` 与 `recordAccepted` 都为 `true`，且没有任何带 `reason: "configuration"` 的日志。
 4. **业务送达**：这条询盘出现在 `INQUIRY_TO_EMAIL` 收件箱，Airtable 中有同一 `Reference ID` 的整行；随后按你的流程标记或删除这条测试记录。
