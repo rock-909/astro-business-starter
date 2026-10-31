@@ -1544,15 +1544,15 @@ textarea[aria-invalid='true'] {
 /* 404: centred, a large grey code, a 24px title and the recovery buttons. */
 @media (max-width: 639.98px) {
   /* On a phone Customize is a text link at the start of the row. */
-  .cookie-customize {
+  .button.cookie-customize {
     padding: 0;
-    border-color: transparent;
+    border: 0;
     text-decoration: underline;
     text-decoration-color: var(--link-underline);
     text-underline-offset: 4px;
   }
-  .cookie-customize:not(:disabled):is(:hover, :active),
-  .cookie-customize[aria-expanded='true'] {
+  .button.cookie-customize:not(:disabled):is(:hover, :active),
+  .button.cookie-customize[aria-expanded='true'] {
     background: transparent;
     text-decoration-color: var(--foreground);
   }

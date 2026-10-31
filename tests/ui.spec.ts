@@ -1067,6 +1067,17 @@ test('the cookie card has no visible title, hugs the phone edge and floats from 
       expect(box).toMatchObject({ x: 0, width: pageWidth });
       expect(box.y + box.height).toBe(800);
       expect(borders).toEqual(['1px', '0px']);
+      // Customize is an underlined text link at the start of the row, not an outlined button.
+      const customize = banner.getByRole('button', { name: cookie.customize, exact: true });
+      const look = await customize.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.borderLeftWidth, style.paddingLeft, style.textDecorationLine];
+      });
+      expect(look).toEqual(['0px', '0px', 'underline']);
+      const decisions = banner.getByRole('button', { name: cookie.rejectAll, exact: true });
+      // First in reading order: left of the decisions, or above them when long labels wrap.
+      const [link, decide] = [(await customize.boundingBox())!, (await decisions.boundingBox())!];
+      expect(link.x < decide.x || link.y + link.height <= decide.y).toBe(true);
     } else {
       expect(box.width).toBe(480);
       expect(box.y + box.height).toBe(780);
