@@ -76,6 +76,32 @@ test('optional company facts are validated and consumed without requiring an org
   }
 });
 
+test('jsonLd stays inert inside a script element and round-trips hostile names', async () => {
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true },
+    appType: 'custom',
+  });
+  try {
+    const { site, jsonLd } = await server.ssrLoadModule('/src/site.ts');
+    const hostile = `A&B "Co" 'Ltd' <b>x</b> </script><script>alert(1)</script>\u2028`;
+    site.name = hostile;
+    site.company = { name: hostile };
+    const output = jsonLd('en', 'contact', hostile, hostile);
+    for (const raw of ['<', '>', '&', '\u2028']) {
+      assert.ok(!output.includes(raw), `raw ${JSON.stringify(raw)} in JSON-LD`);
+    }
+    const graph = JSON.parse(output)['@graph'];
+    const byType = (type) => graph.find((item) => item['@type'] === type);
+    assert.equal(byType('Organization').name, hostile);
+    assert.equal(byType('WebSite').name, hostile);
+    assert.equal(byType('WebPage').name, hostile);
+    assert.equal(byType('WebPage').description, hostile);
+  } finally {
+    await server.close();
+  }
+});
+
 test('company consumer fields reject invalid types at the configuration boundary', () => {
   for (const [company, path] of [
     [{ name: 123 }, 'company.name'],

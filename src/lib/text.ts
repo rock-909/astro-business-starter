@@ -13,8 +13,8 @@ const DISPLAY_SPOOF_CHARS = /[\u202A-\u202E\u2066-\u2069]|[^\P{Cc}\s]/gu;
  *
  * Deliberately does NOT strip angle brackets or protocol-like substrings —
  * buyer text like "width < 900mm" must survive intact. Injection defense
- * lives at the sinks: escapeHtml in lead-utils.ts and
- * formula-prefix escaping in inquiry.ts.
+ * lives at the sinks: escapeHtml and formula-prefix escaping in
+ * inquiry.ts.
  *
  * Use this for single-line fields: names, company names, subject, etc.
  */

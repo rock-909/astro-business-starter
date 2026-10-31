@@ -191,18 +191,15 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
             <button type="button" class="text-button" data-open-consent>
               {t.cookie.settings}
             </button>
-            <label>
-              <span class="honeypot">{t.accessibility.themeSelector}</span>
-              <select
-                class="theme-select"
-                data-theme-select
-                aria-label={t.accessibility.themeSelector}
-              >
-                <option value="system">{t.theme.switchToSystem}</option>
-                <option value="light">{t.theme.switchToLight}</option>
-                <option value="dark">{t.theme.switchToDark}</option>
-              </select>
-            </label>
+            <select
+              class="theme-select"
+              data-theme-select
+              aria-label={t.accessibility.themeSelector}
+            >
+              <option value="system">{t.theme.switchToSystem}</option>
+              <option value="light">{t.theme.switchToLight}</option>
+              <option value="dark">{t.theme.switchToDark}</option>
+            </select>
           </div>
         </div>
       </div>
