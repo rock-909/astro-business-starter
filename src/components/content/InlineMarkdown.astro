@@ -44,6 +44,7 @@ for (const part of text.split(/(\*\*[^*]+\*\*)/g)) {
     <strong>
       {token.href ? (
         <a
+          class="text-link"
           href={token.href}
           target={token.external ? '_blank' : undefined}
           rel={token.external ? 'noopener noreferrer' : undefined}
@@ -56,6 +57,7 @@ for (const part of text.split(/(\*\*[^*]+\*\*)/g)) {
     </strong>
   ) : token.href ? (
     <a
+      class="text-link"
       href={token.href}
       target={token.external ? '_blank' : undefined}
       rel={token.external ? 'noopener noreferrer' : undefined}

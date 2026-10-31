@@ -78,6 +78,26 @@ Node 24.22.1, dependencies from `npm ci`, `CI=1`, Playwright's cached Chromium h
 
 `npm run verify` was not run as one aggregate command. The test build configures no contact, so the configured-contact aside intro is not exercised; the success-state appearance was not screenshotted. None of these checks prove live providers or deployment.
 
+## b2b design tokens and base typography, PR1 (2026-10-31 UTC)
+
+Node 24.22.1, dependencies from `npm ci`, `CI=1`, `TEST_PORT=5271`, Playwright's cached Chromium. Counterexamples replace only the named source and rebuild with `npm run build:test`; every replacement was reverted and rebuilt before the final run.
+
+| Check | Result |
+|---|---|
+| `npm run check`, `74d2e2d` (run by the author) | PASS — 0 errors, 0 warnings, 0 hints |
+| `npm run build:test`, `74d2e2d` (run by the author) | PASS |
+| `npm test`, `74d2e2d` (run by the author) | PASS — 51/51 |
+| `npm run test:browser`, `74d2e2d` (run by the author) | PASS — 87 passed |
+| `npm run verify` and `npm run format:check`, `74d2e2d` (run by the author) | PASS — exit 0 |
+| Counterexample on `c95b58c` (run by the author): link reset removed so `a` keeps the browser underline, `data-theme="light"` removed from `<html>`, `syncTheme` defaulting to `system` | Expected FAIL — header current/hover conventions, first-visit-light and footer/in-content-link tests in both template and derived projects; PASS again after revert |
+| `npx playwright test -g "unknown routes give localized 404"`, with the 404 primary and outline buttons asserted at 40px | PASS — 2/2 (template, derived) |
+| Same, `src/styles/global.css` from `c95b58c` (`min-height` buttons) | Expected FAIL — 2/2: outline button `Received: 42`, `Expected: 40` in both projects |
+| `npm run test:browser`, final sources with the 404 height assertion | PASS — 87 passed, 3 skipped |
+| `npx prettier --check tests/ui.spec.ts` | PASS |
+| Reference search (`git grep -nF` for `eyebrow`, `secondary`, `--surface`, `--soft`, `--focus`, `--on-primary`, `--input-border`, excluding this file and the lockfile) | No users left; only the new `--surface-radius` token and the comment `Outline buttons are secondary actions` in `src/styles/global.css` |
+
+`npm run check`, `npm test` and `npm run verify` were not re-run after adding the 404 height assertion, which changes only `tests/ui.spec.ts`. None of these checks prove live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.

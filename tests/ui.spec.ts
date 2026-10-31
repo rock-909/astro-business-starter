@@ -45,7 +45,7 @@ async function withLongCompanyEmail(page: Page, site: Site) {
         if (unconfigured) html = html.replace(unconfigured, '');
       } else if (unconfigured) html = html.replace(unconfigured, methods);
       else html = html.replace('</aside>', `${methods}</aside>`);
-      if (!/class="fallback"[^>]*>[^<]*<a href="mailto:/.test(html))
+      if (!/class="fallback"[^>]*>[^<]*<a [^>]*href="mailto:/.test(html))
         html = html.replace('</form>', `</form><p class="fallback">${link}</p>`);
       await route.fulfill({ response, body: html });
     },
@@ -69,6 +69,34 @@ const socialNames = { linkedin: 'LinkedIn', twitter: 'X' };
 const homeLocale = (site: Site) => site.locales[0];
 const secondLocale = (site: Site) => site.locales[1];
 const contactPath = (site: Site, locale: Locale) => site.pathFor(locale, 'contact');
+declare global {
+  interface Window {
+    /** Any CSS colour (the theme tokens are OKLCH) as sRGB 0-255 channels plus 0-255 alpha. */
+    rgba(color: string): number[];
+  }
+}
+// Computed styles keep OKLCH as written, so colours are read back through a canvas pixel.
+const installColorProbe = (page: Page) =>
+  page.addInitScript(() => {
+    const context = document
+      .createElement('canvas')
+      .getContext('2d', { willReadFrequently: true })!;
+    window.rgba = (color) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      return [...context.getImageData(0, 0, 1, 1).data];
+    };
+  });
+// A theme token as the same sRGB channels the probe gives for an element's colour.
+const tokenColor = (page: Page, name: string) =>
+  page.evaluate(
+    (name) => window.rgba(getComputedStyle(document.documentElement).getPropertyValue(name)).join(),
+    name,
+  );
+// Colour transitions run 150ms; read a state only once they have finished.
+const settled = (page: Page) =>
+  page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
 
 test.beforeEach(async ({ page, request, controlURL }) => {
   await request.post(controlURL, { data: { reset: true } });
@@ -76,6 +104,7 @@ test.beforeEach(async ({ page, request, controlURL }) => {
   page.on('pageerror', (error) => errors.push(error.message));
   (page as unknown as { unexpectedErrors: string[] }).unexpectedErrors = errors;
   await mockWidget(page);
+  await installColorProbe(page);
 });
 test.afterEach(async ({ page }) => {
   expect((page as unknown as { unexpectedErrors: string[] }).unexpectedErrors).toEqual([]);
@@ -200,7 +229,10 @@ test('unknown routes give localized 404 recovery rather than false business page
       exact: true,
     });
     await expect(contact).toHaveAttribute('href', contactPath(site, locale));
-    await page.getByRole('link', { name: notFound.goHome }).click();
+    const goHome = page.getByRole('link', { name: notFound.goHome });
+    expect((await goHome.boundingBox())!.height).toBe(40);
+    expect((await contact.boundingBox())!.height).toBe(40);
+    await goHome.click();
     await expect(page).toHaveURL(home);
     await page.goto(`${home === '/' ? '' : home}/missing-offering`);
     await contact.click();
@@ -369,6 +401,8 @@ test('no-JS content, legal links, and secure fallback remain readable', async ({
     page.getByRole('button', { name: site.messages(locale).cookie.settings }),
   ).toBeHidden();
   await expect(page.locator('[data-theme-select]')).toBeHidden();
+  // Like the reference site, a visit without scripts is shown light.
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   // Without the form, a configured mailbox is the way to reach the business.
   const email = site.site.contact.email;
   if (email)
@@ -466,38 +500,54 @@ test('header marks the current page and language alike; links and buttons react 
 }) => {
   const locale = homeLocale(site);
   const t = site.messages(locale);
-  const decoration = (selector: string) =>
+  const look = (selector: string) =>
     page.locator(selector).evaluate((element) => {
       const style = getComputedStyle(element);
-      return `${style.textDecorationLine} ${style.textDecorationThickness}`;
+      return { color: window.rgba(style.color).join(), underline: style.textDecorationLine };
     });
   await page.goto(site.pathFor(locale, 'home'));
   await dismissConsent(page, site);
-  // Current items: foreground colour and a 2px underline; the others stay plain until hover.
+  await page.mouse.move(0, 0);
+  await settled(page);
+  const current = { color: await tokenColor(page, '--foreground'), underline: 'none' };
+  const other = { color: await tokenColor(page, '--muted-foreground'), underline: 'none' };
+  expect(current.color).not.toBe(other.color);
+  // The current item is in the foreground colour, the others grey; nothing is underlined.
   const multilingual = site.locales.length > 1;
-  for (const selector of [
+  const currentItems = [
     `.main-nav a[href="${site.pathFor(locale, 'home')}"]`,
     ...(multilingual ? [`.language-nav a[lang="${locale}"]`] : []),
-  ])
-    expect(await decoration(selector), selector).toBe('underline 2px');
-  for (const selector of [
+  ];
+  for (const selector of currentItems) expect(await look(selector), selector).toEqual(current);
+  const otherItems = [
     `.main-nav a[href="${contactPath(site, locale)}"]`,
     ...site.locales
       .filter((language) => language !== locale)
       .map((language) => `.language-nav a[lang="${language}"]`),
-    'a.brand',
-  ]) {
-    expect(await decoration(selector), selector).toMatch(/^none /);
+  ];
+  for (const selector of otherItems) {
+    expect(await look(selector), selector).toEqual(other);
+    // Hover darkens the text without an underline, and the current item in the same nav
+    // turns grey so only one item is highlighted at a time.
     await page.locator(selector).hover();
-    expect(await decoration(selector), selector).toMatch(/^underline /);
+    await settled(page);
+    expect(await look(selector), `${selector} hovered`).toEqual(current);
+    const sameNav = currentItems.find((item) => item.split(' ')[0] === selector.split(' ')[0])!;
+    expect(await look(sameNav), `${sameNav} while ${selector} is hovered`).toEqual(other);
+    await page.mouse.move(0, 0);
+    await settled(page);
   }
+  // The brand gives hover feedback without an underline.
+  expect((await look('a.brand')).underline).toBe('none');
+  await page.locator('a.brand').hover();
+  expect((await look('a.brand')).underline).toBe('none');
   await expect(page.locator('.main-nav')).not.toContainText('↗');
 
   const contrast = (selector: string) =>
     page.locator(selector).evaluate((element) => {
       const luminance = (color: string) => {
-        const channels = color
-          .match(/[\d.]+/g)!
+        const channels = window
+          .rgba(color)
           .slice(0, 3)
           .map((value) => {
             const channel = Number(value) / 255;
@@ -518,13 +568,90 @@ test('header marks the current page and language alike; links and buttons react 
     for (const name of [t.errors.notFound.goHome, t.footer.sections.navigation.contact]) {
       const button = page.locator('main').getByRole('link', { name, exact: true });
       await page.mouse.move(0, 0);
+      await settled(page);
       const resting = await button.evaluate((element) => getComputedStyle(element).backgroundColor);
       await button.hover();
+      await settled(page);
       const hovered = await contrast(`.not-found-actions a:hover`);
       expect(hovered.background, `${theme} ${name}`).not.toBe(resting);
       expect(hovered.ratio, `${theme} ${name}`).toBeGreaterThanOrEqual(4.5);
     }
   }
+});
+
+test('a first visit is light even on a dark system; the system and dark choices persist', async ({
+  page,
+  site,
+}) => {
+  const t = site.messages(homeLocale(site));
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto(site.pathFor(homeLocale(site), 'home'));
+  const html = page.locator('html');
+  const select = page.getByRole('combobox', { name: t.accessibility.themeSelector });
+  const background = () =>
+    page.evaluate(() => window.rgba(getComputedStyle(document.documentElement).backgroundColor));
+  await expect(html).toHaveAttribute('data-theme', 'light');
+  await expect(select).toHaveValue('light');
+  const light = await background();
+  await select.selectOption('system');
+  await expect(html).not.toHaveAttribute('data-theme');
+  expect(await background()).not.toEqual(light);
+  await page.reload();
+  await expect(html).not.toHaveAttribute('data-theme');
+  await expect(select).toHaveValue('system');
+  await select.selectOption('dark');
+  await page.reload();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+  await expect(select).toHaveValue('dark');
+});
+
+test('footer links are grey without an underline and darken on hover; in-content links keep a grey underline', async ({
+  page,
+  site,
+}) => {
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
+  await page.goto(contactPath(site, locale));
+  await dismissConsent(page, site);
+  await page.mouse.move(0, 0);
+  await settled(page);
+  const foreground = await tokenColor(page, '--foreground');
+  const grey = await tokenColor(page, '--muted-foreground');
+  const look = (target: ReturnType<Page['locator']>) =>
+    target.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        color: window.rgba(style.color).join(),
+        underline: style.textDecorationLine,
+        decoration: window.rgba(style.textDecorationColor).join(),
+      };
+    });
+  const footer = page.getByRole('contentinfo');
+  const footerControls = [
+    ...(await footer.getByRole('link').all()),
+    footer.getByRole('button', { name: t.cookie.settings, exact: true }),
+  ];
+  expect(footerControls.length).toBeGreaterThan(2);
+  for (const control of footerControls) {
+    const name = (await control.textContent())!.trim();
+    expect(await look(control), name).toMatchObject({ color: grey, underline: 'none' });
+    await control.hover();
+    await settled(page);
+    expect(await look(control), `${name} hovered`).toMatchObject({
+      color: foreground,
+      underline: 'none',
+    });
+    await page.mouse.move(0, 0);
+    await settled(page);
+  }
+  // Links inside sentences are foreground text with a lighter underline that darkens on hover.
+  const inContent = page.locator('.privacy-notice a').first();
+  const resting = await look(inContent);
+  expect(resting).toMatchObject({ color: foreground, underline: 'underline' });
+  expect(resting.decoration).not.toBe(foreground);
+  await inContent.hover();
+  await settled(page);
+  expect(await look(inContent)).toMatchObject({ underline: 'underline', decoration: foreground });
 });
 
 test('contact aside has its own line instead of repeating the message hint', async ({
@@ -865,19 +992,11 @@ test('dark tokens match for the system preference and the explicit choice; main 
   expect(themes['dark (system)']).not.toEqual(themes['light (system)']);
   const ratios = await page.evaluate(
     (themes) => {
-      const probe = document.createElement('span');
-      document.body.append(probe);
       const luminance = (token: string, color: string) => {
-        probe.style.color = color;
-        const resolved = getComputedStyle(probe).color;
-        if (!/^rgba?\(/.test(resolved))
+        const values = window.rgba(color);
+        if (values[3]! < 255)
           throw new Error(
-            `${token} resolves to ${resolved}; contrast needs an rgb()/rgba() colour`,
-          );
-        const values = resolved.match(/[\d.]+/g)!;
-        if (Number(values[3] ?? 1) < 1)
-          throw new Error(
-            `${token} resolves to non-opaque ${resolved}; contrast needs opaque colours`,
+            `${token} resolves to non-opaque ${color}; contrast needs opaque colours`,
           );
         const channels = values.slice(0, 3).map((value) => {
           const channel = Number(value) / 255;
@@ -892,9 +1011,16 @@ test('dark tokens match for the system preference and the explicit choice; main 
         return (light! + 0.05) / (dark! + 0.05);
       };
       const pairs = [
-        ['--on-primary', '--primary'],
+        ['--button-primary-fg', '--button-primary-bg'],
+        ['--button-primary-fg', '--button-primary-hover-bg'],
         ['--foreground', '--background'],
-        ['--muted', '--surface'],
+        ['--muted-foreground', '--background'],
+        ['--muted-foreground', '--card'],
+        ['--muted-foreground', '--popover'],
+        ['--success-foreground', '--success-muted'],
+        ['--warning-foreground', '--warning-muted'],
+        ['--error-foreground', '--error-muted'],
+        ['--info-foreground', '--info-muted'],
       ];
       const result = Object.entries(themes).flatMap(([name, tokens]) =>
         pairs.map(([text, background]) => ({
@@ -902,7 +1028,6 @@ test('dark tokens match for the system preference and the explicit choice; main 
           ratio: ratio(tokens, text!, background!),
         })),
       );
-      probe.remove();
       return result;
     },
     { light: themes['light (system)']!, dark: themes['dark (system)']! },
@@ -1310,10 +1435,9 @@ test('active inquiry field boundaries have at least 3:1 contrast in both themes'
       await field.clear();
       const colors = await field.evaluate((element) => {
         const luminance = (color: string) => {
-          const channels = color
-            .match(/[\d.]+/g)!
+          const channels = window
+            .rgba(color)
             .slice(0, 3)
-            .map(Number)
             .map((value) => {
               const channel = value / 255;
               return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
