@@ -1,5 +1,4 @@
 import test from 'node:test';
-import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer as createHttpServer } from 'node:http';
@@ -11,7 +10,6 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -25,7 +23,6 @@ import {
   readinessIssues,
   templateCopy,
   templateOnlyKeys,
-  templateShareImages,
 } from '../scripts/readiness.mjs';
 import { startHarness } from './harness.mjs';
 import { derivedRoot, minimalPng } from './derived-site.mjs';
@@ -104,17 +101,20 @@ const launchIdentity = {
   readiness: { ownerConfirmedIdentity: true, legalReviewed: { en: true, es: true } },
 };
 const htmlEntities = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+// Built HTML text or attribute value with HTML character references undone.
+const decodeHtml = (text) =>
+  text.replace(/&(?:#(\d+)|#x([\da-f]+)|(\w+));/gi, (entity, decimal, hex, name) =>
+    decimal
+      ? String.fromCodePoint(Number(decimal))
+      : hex
+        ? String.fromCodePoint(parseInt(hex, 16))
+        : (htmlEntities[name] ?? entity),
+  );
 // The favicon href a built page declares, with HTML attribute escaping undone.
-const faviconHref = (html) =>
-  html
-    .match(/<link rel="icon" href="([^"]*)"/)?.[1]
-    .replace(/&(?:#(\d+)|#x([\da-f]+)|(\w+));/gi, (entity, decimal, hex, name) =>
-      decimal
-        ? String.fromCodePoint(Number(decimal))
-        : hex
-          ? String.fromCodePoint(parseInt(hex, 16))
-          : (htmlEntities[name] ?? entity),
-    );
+const faviconHref = (html) => {
+  const href = html.match(/<link rel="icon" href="([^"]*)"/)?.[1];
+  return href === undefined ? href : decodeHtml(href);
+};
 // Inert syntax-only prerequisites; no request is made to these hosts/providers.
 const productionPrerequisites = {
   PUBLIC_APP_ENV: 'production',
@@ -690,9 +690,9 @@ test('a derived site with its own logo and social links renders them without tem
       assert.ok(link, `${file} links ${href}`);
       assert.match(link[0], /target="_blank"/);
       assert.match(link[1], /<span aria-hidden="true">↗<\/span>/);
-      return link[1]
-        .replace(/<span aria-hidden="true">[^<]*<\/span>/g, '')
-        .replace(/<[^>]+>/g, '')
+      return decodeHtml(
+        link[1].replace(/<span aria-hidden="true">[^<]*<\/span>/g, '').replace(/<[^>]+>/g, ''),
+      )
         .replace(/\s+/g, ' ')
         .trim();
     };
@@ -701,37 +701,26 @@ test('a derived site with its own logo and social links renders them without tem
   }
 });
 
-// The starter's share image is only available while the checkout still ships it.
-const starterShareImage = readdirSync('public', { recursive: true })
-  .map((file) => join('public', file))
-  .find(
-    (file) =>
-      statSync(file).isFile() &&
-      templateShareImages.has(createHash('sha256').update(readFileSync(file)).digest('hex')),
-  );
-test(
-  'readiness rejects the starter share image as a launch share image',
-  { skip: !starterShareImage && 'this checkout no longer ships the starter share image' },
-  () => {
-    const fixture = launchFixture();
-    try {
-      cpSync(starterShareImage, join(fixture, 'public/starter-share.png'));
-      assert.deepEqual(
-        readinessIssues(
-          productionPrerequisites,
-          {
-            ...launchIdentity,
-            brandAssets: { ...launchIdentity.brandAssets, ogImage: '/starter-share.png' },
-          },
-          pathToFileURL(`${fixture}/`),
-        ),
-        ['brandAssets.ogImage /starter-share.png is still the template share image'],
-      );
-    } finally {
-      rmSync(fixture, { recursive: true, force: true });
-    }
-  },
-);
+// A frozen byte copy of the starter share image, independent of what public/ ships.
+test('readiness rejects the starter share image as a launch share image', () => {
+  const fixture = launchFixture();
+  try {
+    cpSync(resolve('tests/fixtures/template-share.png'), join(fixture, 'public/starter-share.png'));
+    assert.deepEqual(
+      readinessIssues(
+        productionPrerequisites,
+        {
+          ...launchIdentity,
+          brandAssets: { ...launchIdentity.brandAssets, ogImage: '/starter-share.png' },
+        },
+        pathToFileURL(`${fixture}/`),
+      ),
+      ['brandAssets.ogImage /starter-share.png is still the template share image'],
+    );
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
 
 test('browser tests refuse a server already on their port instead of testing it', async () => {
   // Stands in for a test server left running by another checkout or an older build.
