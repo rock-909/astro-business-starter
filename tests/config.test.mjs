@@ -13,6 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { assertValidSiteConfig } from '../src/site-schema.ts';
 import { readinessIssues } from '../scripts/readiness.mjs';
@@ -20,6 +21,55 @@ import { readinessIssues } from '../scripts/readiness.mjs';
 const identity = JSON.parse(
   readFileSync(new URL('../src/site-data.json', import.meta.url), 'utf8'),
 );
+// Owner-rewritten copy for every template phrase a derived site must replace before launch.
+const launchCopy = 'Owner approved copy';
+function writeLaunchCopy(root) {
+  for (const locale of ['en', 'es']) {
+    const file = join(root, `src/content/${locale}/messages.json`);
+    const messages = JSON.parse(readFileSync(file, 'utf8'));
+    messages.home.metadata.description = launchCopy;
+    messages.home.description = launchCopy;
+    messages.home.eyebrow = launchCopy;
+    messages['structured-data'].website.description = launchCopy;
+    messages.navigation.siteDescription = launchCopy;
+    writeFileSync(file, JSON.stringify(messages));
+    writeFileSync(
+      join(root, `src/content/${locale}/contact.ts`),
+      `export default ${JSON.stringify({
+        metadata: {
+          title: 'Contact',
+          updatedAt: '2026-10-25',
+          seo: { title: 'Contact', description: launchCopy },
+        },
+        content: launchCopy,
+      })};`,
+    );
+    for (const page of ['privacy', 'terms'])
+      writeFileSync(
+        join(root, `src/content/${locale}/${page}.ts`),
+        `export default ${JSON.stringify({
+          metadata: {
+            title: page,
+            updatedAt: '2026-10-25',
+            seo: { title: page, description: 'Owner approved legal copy' },
+          },
+          content: 'Owner approved legal copy',
+        })};`,
+      );
+  }
+}
+const launchIdentity = {
+  ...identity,
+  name: 'Configured business',
+  description: 'Owner confirmed business identity',
+  seo: {
+    titleTemplate: '%s | Configured business',
+    defaultTitle: 'Configured business',
+    defaultDescription: launchCopy,
+  },
+  contact: { email: 'sales@supplier.co.uk' },
+  readiness: { ownerConfirmedIdentity: true, legalReviewed: { en: true, es: true } },
+};
 // Inert syntax-only prerequisites; no request is made to these hosts/providers.
 const productionPrerequisites = {
   PUBLIC_APP_ENV: 'production',
@@ -114,6 +164,75 @@ test('readiness requires nonblank identity and SEO text even after owner confirm
   }
 });
 
+test('readiness rejects shipped template copy and accepts owner-rewritten copy', () => {
+  const shipped = readinessIssues(productionPrerequisites, {
+    ...launchIdentity,
+    seo: identity.seo,
+  });
+  for (const issue of [
+    'seo.titleTemplate still contains template copy',
+    'seo.defaultDescription still contains template copy',
+    'en/messages home.metadata.description still contains template copy',
+    'en/messages structured-data.website.description still contains template copy',
+    'en/messages navigation.siteDescription still contains template copy',
+    'es/messages home.metadata.description still contains template copy',
+    'es/messages structured-data.website.description still contains template copy',
+    'es/messages navigation.siteDescription still contains template copy',
+    'en/contact still contains template copy',
+    'es/contact still contains template copy',
+  ])
+    assert.ok(shipped.includes(issue), issue);
+  // Only rendered in states readiness already blocks, or not template copy at all.
+  assert.ok(
+    !shipped.some((issue) => /experiment\.|unconfiguredMailbox|referenceLabel/.test(issue)),
+    shipped.join('\n'),
+  );
+
+  const fixture = mkdtempSync(join(tmpdir(), 'astro-copy-'));
+  try {
+    cpSync(resolve('src/content'), join(fixture, 'src/content'), { recursive: true });
+    cpSync(resolve('public'), join(fixture, 'public'), { recursive: true });
+    writeLaunchCopy(fixture);
+    assert.deepEqual(
+      readinessIssues(productionPrerequisites, launchIdentity, pathToFileURL(`${fixture}/`)),
+      [],
+    );
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test('readiness rejects configured root-relative brand files missing from public/', () => {
+  const issues = (brandAssets) =>
+    readinessIssues({}, { ...identity, brandAssets }).filter((issue) =>
+      issue.startsWith('brandAssets.'),
+    );
+  const logo = { status: 'ready', width: 200, height: 40 };
+  assert.deepEqual(
+    issues({
+      ogImage: '/missing-share.png',
+      favicon: '/missing-icon.svg',
+      logo: { ...logo, horizontal: '/missing-logo.svg' },
+    }),
+    [
+      'brandAssets.ogImage /missing-share.png does not exist under public/',
+      'brandAssets.favicon /missing-icon.svg does not exist under public/',
+      'brandAssets.logo.horizontal /missing-logo.svg does not exist under public/',
+    ],
+  );
+  assert.deepEqual(
+    issues({
+      ogImage: 'https://cdn.supplier.co.uk/share.png',
+      favicon: '/icon.svg',
+      logo: { ...logo, horizontal: '/opengraph-image.svg' },
+    }),
+    [],
+  );
+  assert.deepEqual(issues({ ...identity.brandAssets, favicon: '/../package.json' }), [
+    'brandAssets.favicon /../package.json does not exist under public/',
+  ]);
+});
+
 test('real Astro builds use dotenv, mode files and shell precedence for launch readiness', async (suite) => {
   const root = resolve('.');
   for (const scenario of [
@@ -182,36 +301,8 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
         for (const [file, text] of Object.entries(scenario.files))
           writeFileSync(join(fixture, file), text);
         if (scenario.ready) {
-          writeFileSync(
-            join(fixture, 'src/site-data.json'),
-            JSON.stringify({
-              ...identity,
-              name: 'Configured business',
-              description: 'Owner confirmed business identity',
-              contact: { email: 'sales@supplier.co.uk' },
-              readiness: {
-                ownerConfirmedIdentity: true,
-                legalReviewed: { en: true, es: true },
-              },
-            }),
-          );
-          for (const locale of ['en', 'es'])
-            for (const page of ['privacy', 'terms']) {
-              writeFileSync(
-                join(fixture, `src/content/${locale}/${page}.ts`),
-                `export default ${JSON.stringify({
-                  metadata: {
-                    title: page,
-                    updatedAt: '2026-10-25',
-                    seo: {
-                      title: page,
-                      description: 'Owner approved legal copy',
-                    },
-                  },
-                  content: 'Owner approved legal copy',
-                })};`,
-              );
-            }
+          writeFileSync(join(fixture, 'src/site-data.json'), JSON.stringify(launchIdentity));
+          writeLaunchCopy(fixture);
         }
         const env = {
           ...process.env,

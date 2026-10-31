@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
 import { loadEnv } from 'vite';
@@ -31,15 +31,25 @@ const mailbox = (value) =>
   value.length <= 254 &&
   /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(value) &&
   publicHostname(value.split('@')[1]);
+// Starter wording that must not reach an indexable derived site (EN and ES).
+const templateCopy =
+  /astro business starter|non-production|no destinado a producción|sentinel|reference (?:site|contact page)|site reference|(?:sitio|página)(?: de contacto)? de referencia|starting point|punto de partida|should replace|debe sustituir|must be replaced|not ready to receive|no está listo para recibir/i;
+// Only rendered in states readiness already blocks: experiment builds and a blank mailbox.
+const templateOnlyKeys = /^(?:experiment\.|contact\.panel\.unconfiguredMailbox$)/;
+const stringLeaves = (value, path = '') =>
+  typeof value === 'string'
+    ? [[path, value]]
+    : Object.entries(value ?? {}).flatMap(([key, child]) =>
+        stringLeaves(child, path ? `${path}.${key}` : key),
+      );
 const senderMailbox = (value) =>
   typeof value === 'string' &&
   !/[\r\n]/.test(value) &&
   mailbox(value.match(/^[^<>]+<([^<>]+)>$/)?.[1]?.trim() || value);
 
-export function readinessIssues(
-  env = process.env,
-  data = JSON.parse(readFileSync(new URL('../src/site-data.json', import.meta.url), 'utf8')),
-) {
+export function readinessIssues(env = process.env, data, root = new URL('../', import.meta.url)) {
+  const read = (path) => readFileSync(new URL(path, root), 'utf8');
+  data ??= JSON.parse(read('src/site-data.json'));
   const issues = [];
   const required = [
     'PUBLIC_SITE_URL',
@@ -110,16 +120,44 @@ export function readinessIssues(
     /template|reference|placeholder/i.test(`${data.name} ${data.description}`)
   )
     issues.push('The owner must confirm real business identity and replace template identity');
+  for (const [path, value] of [
+    ['name', data.name],
+    ['description', data.description],
+    ['seo.titleTemplate', data.seo?.titleTemplate],
+    ['seo.defaultTitle', data.seo?.defaultTitle],
+    ['seo.defaultDescription', data.seo?.defaultDescription],
+  ])
+    if (templateCopy.test(value || '')) issues.push(`${path} still contains template copy`);
+  // A valid path format does not mean the file ships: a wrong one breaks the header,
+  // share cards and the JSON-LD logo.
+  const publicRoot = new URL('public/', root);
+  for (const [path, value] of [
+    ['brandAssets.ogImage', data.brandAssets?.ogImage],
+    ['brandAssets.favicon', data.brandAssets?.favicon],
+    ['brandAssets.logo.horizontal', data.brandAssets?.logo?.horizontal],
+  ]) {
+    if (typeof value !== 'string' || !value.startsWith('/')) continue;
+    const file = new URL(`.${new URL(value, 'https://site.invalid').pathname}`, publicRoot);
+    if (
+      !file.href.startsWith(publicRoot.href) ||
+      !statSync(file, { throwIfNoEntry: false })?.isFile()
+    )
+      issues.push(`${path} ${value} does not exist under public/`);
+  }
   if (!data.contact?.email || sentinel.test(data.contact.email))
     issues.push('A real owner-confirmed public contact email is required');
   if (!data.readiness?.legalReviewed?.en || !data.readiness?.legalReviewed?.es)
     issues.push('Both legal locales must be reviewed and approved');
-  for (const locale of ['en', 'es'])
+  for (const locale of ['en', 'es']) {
+    for (const [path, value] of stringLeaves(
+      JSON.parse(read(`src/content/${locale}/messages.json`)),
+    ))
+      if (!templateOnlyKeys.test(path) && templateCopy.test(value))
+        issues.push(`${locale}/messages ${path} still contains template copy`);
+    if (templateCopy.test(read(`src/content/${locale}/contact.ts`)))
+      issues.push(`${locale}/contact still contains template copy`);
     for (const page of ['privacy', 'terms']) {
-      const text = readFileSync(
-        new URL(`../src/content/${locale}/${page}.ts`, import.meta.url),
-        'utf8',
-      );
+      const text = read(`src/content/${locale}/${page}.ts`);
       if (
         /placeholder|to be completed|incomplete|por completar|incomplet[ao]|marcador de posición/i.test(
           text,
@@ -127,6 +165,7 @@ export function readinessIssues(
       )
         issues.push(`${locale}/${page} still contains template legal text`);
     }
+  }
   return [...new Set(issues)];
 }
 

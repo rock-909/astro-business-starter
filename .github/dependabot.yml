@@ -1,6 +1,7 @@
 # Dependabot version updates. CI validates each pull request it opens.
-# Dependabot's default 3-day cooldown applies to version updates; security
-# updates are not delayed by it.
+# Security updates are enabled in the repository settings, not in this file;
+# Dependabot's default 3-day cooldown applies only to version updates and does
+# not delay security updates.
 version: 2
 updates:
   - package-ecosystem: npm

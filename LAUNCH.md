@@ -1,0 +1,89 @@
+# 派生站点上线与交接
+
+本文件负责派生站点从“模板拒绝上线”到“正式上线”的步骤和交接。模板自身不是可上线站点，`npm run readiness` 与生产构建对它的拒绝应继续生效。本项目没有部署流水线、GitHub Environment 或灰度发布；以下步骤由站点负责人在 Cloudflare 和各供应商处完成。
+
+## 1. 替换内容并通过静态门禁
+
+1. 按 [README.md](README.md) 的“派生站点改哪里”替换身份、域名、联系方式、品牌文件和 EN/ES 文案，审阅双语法律正文后才把 `src/site-data.json` 的 `readiness` 标记改为 `true`。
+2. 运行：
+
+   ```sh
+   npm run verify
+   npm run readiness
+   PUBLIC_APP_ENV=production npm run build
+   ```
+
+`readiness` 会拒绝：缺失或哨兵配置值、模板身份、未完成的法律文案、`messages.json` 与 `contact.ts` 里残留的模板措辞（如 “non-production”“Inquiry site reference”“sitio de referencia”），以及 `public/` 下不存在的根相对品牌文件（`brandAssets.ogImage`、`brandAssets.favicon`、`brandAssets.logo.horizontal`）。通过只说明配置前提齐全，不证明凭证有效、绑定已到 Cloudflare 或邮件已送达。
+
+## 2. Worker 配置放在哪里
+
+`wrangler deploy` 会用 `wrangler.jsonc` 覆盖在 Cloudflare 面板里手动设置的普通变量，secret 则在部署之间保留。因此每个服务端值只能用以下两种方式之一，**不要在面板里设置普通变量**：
+
+| 方式 | 适用的值 |
+| --- | --- |
+| `npx wrangler secret put <NAME>` | `TURNSTILE_SECRET_KEY`、`RESEND_API_KEY`、`AIRTABLE_API_KEY`、`UPSTASH_REDIS_REST_TOKEN`、`RATE_LIMIT_PEPPER` |
+| 派生仓库 `wrangler.jsonc` 的 `vars`（也可用 secret） | `APP_ENV`、`PUBLIC_SITE_URL`、`TURNSTILE_ALLOWED_HOSTS`、`RESEND_FROM_EMAIL`、`INQUIRY_TO_EMAIL`、`AIRTABLE_BASE_ID`、`AIRTABLE_TABLE_NAME`、`UPSTASH_REDIS_REST_URL` |
+
+名称以 `.dev.vars.example` 为准。若 `TURNSTILE_ALLOWED_HOSTS`、`PUBLIC_SITE_URL`、`RESEND_FROM_EMAIL`、`INQUIRY_TO_EMAIL`、`AIRTABLE_BASE_ID` 或 `AIRTABLE_TABLE_NAME` 被一次部署清空，询盘就会停止：允许的主机名为空时每次提交都返回 `TURNSTILE_UNAVAILABLE`；两个交付通道都缺配置时返回 `DELIVERY_UNCONFIRMED`。部署后用 `npx wrangler secret list` 和当前版本的绑定列表核对。
+
+`PUBLIC_*` 构建值（`PUBLIC_APP_ENV`、`PUBLIC_SITE_URL`、`PUBLIC_TURNSTILE_SITE_KEY`、`PUBLIC_GA_MEASUREMENT_ID`、搜索验证值）在构建时写入页面，来自构建机的 shell 或 `.env.production`，见 `.env.example`；不要把 secret 放进 `PUBLIC_*`。`readiness` 同样要求服务端值在检查进程中可见，那只是本地检查，不会替你绑定到 Cloudflare。
+
+## 3. 预览与生产分开
+
+- 预览与生产使用各自的 Upstash 数据库和 Airtable base/table，各自的 `APP_ENV`（限流键以它为前缀）。预览测试不能写入生产 CRM 或联系真实客户。
+- Turnstile、Resend 可以同账号，但预览的主机名和收件箱要与生产分开登记。
+
+## 4. 供应商与域名
+
+**Airtable。** 表的列名必须与 [BUSINESS-CONTRACT.md](BUSINESS-CONTRACT.md) “External schema” 一行完全一致：`Email`、`Submitted At`、`Status`、`Source`、`First Name`、`Last Name`、`Message`、`Reference ID`，以及可选的 `Requirements`、`UTM Source`、`UTM Medium`、`UTM Campaign`、`UTM Term`、`UTM Content`、`Landing Page`、`Captured At`。缺一列或拼写不同，Airtable 返回 422，整条记录不写入；邮件仍成功，所以买家看到成功，CRM 通道却悄悄丢失。唯一迹象是日志里的 `inquiry.airtable_acceptance_unconfirmed` 和 `inquiry.accepted` 中的 `recordAccepted: false`。
+
+**Turnstile。** 在 Turnstile widget 的主机名列表里加入正式域名；`TURNSTILE_ALLOWED_HOSTS` 必须包含 `PUBLIC_SITE_URL` 的主机名。主机名不匹配时提交被拒，日志为 `inquiry.turnstile_rejected` 且 `reason: "invalid-hostname"`，这是区分主机配置错误的唯一信号。
+
+**Resend。** 先在 Resend 验证 `RESEND_FROM_EMAIL` 所在的发信域名（SPF/DKIM），再用正式域名提交一条合成询盘，确认它确实进入 `INQUIRY_TO_EMAIL` 收件箱（而非垃圾箱）。Resend 显示已接受只代表供应商接收，不代表收件箱到达。
+
+**自定义域名与 TLS。** 把 Worker 绑定到正式域名并确认证书生效，`PUBLIC_SITE_URL` 与之一致。模板不发送 `Strict-Transport-Security`；是否在 Cloudflare 开启 HSTS，以及是否加 `includeSubDomains`/`preload`，由域名所有者按整个域名的情况决定——`preload` 会约束所有子域名且难以撤回。
+
+## 5. 搜索、分析与爬虫
+
+- **Google Search Console / Bing Webmaster Tools。** 在构建环境设置 `PUBLIC_GOOGLE_SITE_VERIFICATION` 和 `PUBLIC_BING_SITE_VERIFICATION`（只填 meta 的 content 值），重新构建部署，完成验证后提交 `https://<domain>/sitemap.xml`。
+- **GA4。** 设置 `PUBLIC_GA_MEASUREMENT_ID` 后，GA 只在生产构建且访客同意分析后加载。询盘成功时发送 `generate_lead` 事件，不含买家资料；在 GA4 里把 `generate_lead` 标为关键事件（key event）。
+- **Cloudflare AI 爬虫与 Bot 设置。** Cloudflare 的托管 robots.txt、AI 爬虫拦截和 Bot 防护可能在站点自己的规则前追加或拦截内容。上线后运行 `curl https://<domain>/robots.txt`，确认生产内容为 `Allow: /`（只禁止 `/api/` 和 `/_actions/`），且没有你不想要的对搜索或 AI 爬虫的拦截。
+
+## 6. 日志
+
+`wrangler.jsonc` 开启 Workers Logs，但只保留站点自己的 `console` 日志（参考号、类别和通道标记，从不含表单字段），关闭调用日志和 traces。用 Cloudflare 面板的 Workers Logs 回查，或用 `npx wrangler tail` 实时查看。需要关注的日志：`inquiry.accepted`（含 `emailAccepted`、`recordAccepted`）、`inquiry.email_acceptance_unconfirmed`、`inquiry.airtable_acceptance_unconfirmed`、`inquiry.turnstile_rejected`、`inquiry.rate_limit_unavailable`。
+
+保留期与费用（以 Cloudflare 当前价格页为准）：Free 计划保留 3 天、每天 200k 条事件；Paid 计划保留 7 天、每月 20M 条事件。自 2026-12-01 起 Workers Logs 改按 Cloudflare Observability 计价，上线前核对所在账户的费用。
+
+## 7. 回滚
+
+用 Cloudflare 的 Worker 版本回滚（面板的 Deployments，或 `npx wrangler rollback`）。回滚恢复代码和 `wrangler.jsonc` 里的 `vars`，但**不**回滚 secret、DNS、域名设置，也不恢复 Airtable、Upstash 或邮箱里的数据。改 secret 或供应商设置前先记录旧值所在位置。
+
+## 8. 什么才算“已上线”
+
+以下每一层都有证据才算正式上线，缺任何一层都只能说“已部署”：
+
+1. **静态门禁**：`npm run verify`、`npm run readiness`、`PUBLIC_APP_ENV=production npm run build` 均通过。
+2. **Cloudflare 绑定**：第 2 节列出的值都在当前部署版本中（`wrangler secret list` 与版本绑定），没有面板普通变量。
+3. **供应商接收**：从正式域名提交一条合成询盘，买家看到参考号，日志中 `inquiry.accepted` 的 `emailAccepted` 与 `recordAccepted` 都为 `true`。
+4. **业务送达**：这条询盘出现在 `INQUIRY_TO_EMAIL` 收件箱，Airtable 中有同一 `Reference ID` 的整行；随后按你的流程标记或删除这条测试记录。
+5. **域名与搜索**：HTTPS 正常，`robots.txt` 与 `sitemap.xml` 内容正确，GSC/Bing 已验证并提交 sitemap，GA4 关键事件已设置（如使用 GA）。
+6. **法律与交接**：双语隐私与条款已由负责人审阅，下面的数据清单已交给撰写隐私政策的人。
+
+## 9. 模板收集的数据
+
+供撰写隐私政策的人使用。派生站点增加字段、供应商或分析工具时必须同步更新此表。
+
+| 数据 | 何时收集 | 去向 | 保存 |
+| --- | --- | --- | --- |
+| 姓名、邮箱、留言（可选）、参考号 | 提交询盘 | Resend 邮件发到 `INQUIRY_TO_EMAIL`（回复地址为买家邮箱）；Airtable（`First Name`、`Last Name`、`Email`、`Message`/`Requirements`、`Reference ID`、`Submitted At`） | 由邮箱与 Airtable 的所有者决定；模板不自动删除 |
+| 页面语言 | 提交询盘 | 只进邮件 | 同上 |
+| 5 个 UTM 值、`landingPage`、`capturedAt` | 仅在访客同意分析后 | 邮件与 Airtable 对应列；提交前存于浏览器 `sessionStorage` 的 `inquiry_attribution` | 撤回同意即清除浏览器记录；已交付的邮件/CRM 不会自动删除 |
+| `gclid`、`wbraid`、`gbraid` | 仅在访客同意广告后 | 只进邮件；提交前存于 `inquiry_attribution` | 同上 |
+| 访客 IP（`cf-connecting-ip`） | 提交询盘 | 作为 `remoteip` 发给 Cloudflare Turnstile 校验；限流时 IPv4 地址或 IPv6 /64 前缀经 `RATE_LIMIT_PEPPER` 做 HMAC 后作为 Upstash 计数键 | Upstash 键 60 秒后过期；IP 不进邮件、Airtable 或日志 |
+| Turnstile 挑战 | 打开询盘表单 | Cloudflare Turnstile 在浏览器中运行 | 按 Cloudflare 的政策 |
+| 表单草稿（姓名、邮箱、留言） | 填写表单时 | 浏览器 `sessionStorage` 的 `inquiry-draft`，不离开浏览器 | 当前标签页会话；确认成功后清除 |
+| 同意选择 | 访客做出选择 | 浏览器 `localStorage` 的 `cookie-consent` | 直到访客更改或清除 |
+| 主题偏好 | 访客切换主题 | 浏览器 `localStorage` 的 `theme` | 直到访客更改或清除 |
+| GA4 页面浏览与 `generate_lead`、`contact_click` 事件 | 仅在生产构建、已设置 `PUBLIC_GA_MEASUREMENT_ID` 且访客同意分析后 | Google Analytics；页面地址与来源去掉查询串和 hash，事件不含买家资料 | 按 GA 属性设置；撤回同意会停用 GA 并清除 GA cookie |
+| Worker 日志 | 每次询盘处理 | Cloudflare Workers Logs：参考号、结果类别、通道标记，不含表单字段或 IP | 3 天（Free）或 7 天（Paid） |
