@@ -607,6 +607,7 @@ test('the sticky header marks the current page, offers contact as a button, and 
   ).toBeLessThan(255);
   await expect(banner).toHaveCSS('position', 'sticky');
   await expect(banner).toHaveCSS('top', '0px');
+  await expect(banner).toHaveCSS('backdrop-filter', 'blur(12px)');
   // The current item is in the foreground colour, the others grey; nothing is underlined.
   const nav = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
   const currentItem = nav.locator(':scope > ul > li > a[aria-current="page"]');

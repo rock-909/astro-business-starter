@@ -353,8 +353,9 @@ html {
   padding-top: env(safe-area-inset-top, 0px);
   border-bottom: 1px solid var(--border);
   background: color-mix(in oklab, var(--background) 80%, transparent);
-  backdrop-filter: blur(12px);
+  /* Prefixed first: Lightning CSS drops the unprefixed declaration when it comes first. */
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   transition:
     background-color 200ms,
     border-color 200ms;
