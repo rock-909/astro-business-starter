@@ -34,7 +34,8 @@ const fullTitle =
 const otherLocales: Locale[] = locales.filter((language) => language !== locale);
 // Registered pages link themselves; a message under the column's key names the link,
 // otherwise the page's own title does.
-const navPages = (place: 'main' | 'support') => pages.filter((item) => 'nav' in item && item.nav === place);
+const navPages = (place: 'main' | 'support') =>
+  pages.filter((item) => 'nav' in item && item.nav === place);
 const navLabel = (key: PageKey, labels: Partial<Record<string, string>>) =>
   labels[key] ?? (key === 'home' ? t.navigation.home : pageContent(locale, key).metadata.title);
 // Brand names for the configured social keys; they are the same in every language.
