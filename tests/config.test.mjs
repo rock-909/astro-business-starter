@@ -409,7 +409,8 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
           assert.equal(result.status, 0, output);
           const html = readFileSync(join(fixture, 'dist/client/index.html'), 'utf8');
           if (scenario.ready) {
-            assert.match(html, /<link rel="icon" type="image\/png" href="\/brand-icon.png">/);
+            assert.match(html, /<link rel="icon" href="\/brand-icon.png">/);
+            assert.doesNotMatch(html, /image\/svg\+xml/);
             assert.match(html, /index,follow,max-image-preview:large/);
             assert.match(html, /data-production="true"/);
             const client = readdirSync(join(fixture, 'dist/client'), {
@@ -437,7 +438,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
               await h.close();
             }
           } else {
-            assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/icon.svg">/);
+            assert.match(html, /<link rel="icon" href="\/icon.svg">/);
             assert.match(html, /noindex,nofollow/);
             assert.match(html, /data-production="false"/);
             assert.match(html, /https:\/\/shell\.supplier\.co\.uk/);
