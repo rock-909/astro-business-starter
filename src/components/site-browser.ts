@@ -125,9 +125,11 @@ customize.addEventListener('click', () => {
   choices.hidden = !choices.hidden;
   customize.setAttribute('aria-expanded', String(!choices.hidden));
 });
-document
-  .querySelectorAll('[data-open-consent]')
-  .forEach((button) => button.addEventListener('click', reopen));
+document.querySelectorAll<HTMLElement>('[data-open-consent]').forEach((button) => {
+  // Hidden in the HTML so visitors without JavaScript are not offered a control that does nothing.
+  button.hidden = false;
+  button.addEventListener('click', reopen);
+});
 window.addEventListener('cookie-consent:open', reopen);
 window.addEventListener('storage', (event) => {
   if (event.key === null || event.key === 'cookie-consent') syncConsent();
@@ -142,6 +144,7 @@ new ResizeObserver(() =>
 ).observe(banner);
 
 const themeSelect = document.querySelector<HTMLSelectElement>('[data-theme-select]')!;
+themeSelect.hidden = false;
 function syncTheme() {
   let theme = 'system';
   try {

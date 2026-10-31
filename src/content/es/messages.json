@@ -83,16 +83,17 @@
       "message": "Mensaje",
       "messageHint": "Comparte tus requisitos, plazos, mercado o cualquier contexto útil.",
       "submit": "Enviar consulta",
-      "submitting": "Enviando...",
+      "submitting": "Enviando…",
       "success": "Recibido. El equipo puede revisar tu consulta y responder con el siguiente paso útil o con los datos que aún falten.",
       "referenceLabel": "Referencia",
-      "privacyNotice": "Al enviar este formulario, aceptas nuestra Política de privacidad y las Condiciones del servicio.",
+      "privacyNotice": "Al enviar este formulario, aceptas nuestra {privacy} y las {terms}.",
       "noJsExplanation": "El formulario seguro necesita JavaScript porque la verificación contra bots no puede ejecutarse sin él.",
       "noJsEmailPrefix": "Escríbenos directamente a",
       "contactAriaLabel": "Consulta de contacto",
       "turnstile": {
-        "unavailable": "La verificación de seguridad no está disponible temporalmente.",
-        "loadFailed": "No se ha podido cargar la verificación de seguridad.",
+        "loading": "Cargando la verificación de seguridad…",
+        "unavailable": "La verificación de seguridad no está disponible temporalmente. Inténtalo de nuevo en unos minutos o escríbenos a la dirección de correo de esta página.",
+        "loadFailed": "No se ha podido cargar la verificación de seguridad. Recarga la página o escríbenos a la dirección de correo de esta página.",
         "expired": "La verificación de seguridad ha caducado. Complétala de nuevo.",
         "rescueAfterEmail": "Incluye tus requisitos y datos de contacto."
       },
@@ -113,12 +114,12 @@
           "invalid": "El mensaje contiene caracteres no válidos",
           "tooLong": "El mensaje debe tener 2000 caracteres o menos"
         },
-        "rateLimitSummary": "Demasiados intentos. Espera antes de volver a enviar la consulta.",
+        "rateLimitSummary": "Demasiados intentos. Espera aproximadamente un minuto y vuelve a enviar la consulta.",
         "rateLimitReady": "Ya puedes volver a enviar la consulta."
       },
       "title": "Iniciar una consulta",
       "website": "Sitio web",
-      "unknown": "No hemos podido confirmar el resultado. Es posible que se haya recibido tu consulta. Conservamos tus datos; reintentar puede crear un duplicado. Puedes volver a intentarlo con una nueva verificación o utilizar un contacto configurado.",
+      "unknown": "No hemos podido confirmar el resultado. Es posible que se haya recibido tu consulta. Conservamos tus datos; reintentar puede crear un duplicado. Puedes volver a intentarlo con una nueva verificación o, si no recibes respuesta, escríbenos a la dirección de correo de esta página.",
       "localePending": "Espera al resultado de la consulta antes de cambiar de idioma.",
       "localeStorageUnavailable": "El navegador no permite conservar el borrador al cambiar de idioma. Copia o borra tus datos antes de cambiar."
     }

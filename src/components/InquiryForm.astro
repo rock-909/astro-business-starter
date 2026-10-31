@@ -7,10 +7,16 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = messages(locale).inquiry.form;
+const legal = messages(locale).footer.sections.support;
+// Link the policy names inside the sentence instead of repeating them after it.
+const privacyNotice = t.privacyNotice.split(/(\{privacy\}|\{terms\})/);
 ---
 
 <section class="inquiry-card" id="inquiry" aria-label={t.contactAriaLabel}>
   <h2>{t.title}</h2>
+  <noscript>
+    <p class="fallback">{t.noJsExplanation}</p>
+  </noscript>
   <form
     method="post"
     action={pathFor(locale, 'contact')}
@@ -69,9 +75,7 @@ const t = messages(locale).inquiry.form;
     </div>
     <div class="verification">
       <div data-turnstile></div>
-      <p data-verification-status role="status">
-        {t.turnstile.unavailable}
-      </p>
+      <p data-verification-status role="status"></p>
     </div>
     <div
       data-form-status
@@ -82,19 +86,21 @@ const t = messages(locale).inquiry.form;
       tabindex="-1"
     ></div>
     <button type="submit" class="button" data-submit disabled>
-      {t.submit}
+      <span data-submit-label>{t.submit}</span>
       <span aria-hidden="true">↗</span>
     </button>
     <p class="privacy-notice">
-      {t.privacyNotice}{' '}
-      <a href={pathFor(locale, 'privacy')}>{messages(locale).footer.sections.support.privacy}</a>
-      {' · '}
-      <a href={pathFor(locale, 'terms')}>{messages(locale).footer.sections.support.terms}</a>
+      {privacyNotice.map((part) =>
+        part === '{privacy}' ? (
+          <a href={pathFor(locale, 'privacy')}>{legal.privacy}</a>
+        ) : part === '{terms}' ? (
+          <a href={pathFor(locale, 'terms')}>{legal.terms}</a>
+        ) : (
+          part
+        ),
+      )}
     </p>
   </form>
-  <noscript>
-    <p class="fallback">{t.noJsExplanation}</p>
-  </noscript>
   {site.contact.email && (
     <p class="fallback">
       {t.noJsEmailPrefix} <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>.{' '}

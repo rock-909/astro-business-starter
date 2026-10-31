@@ -59,6 +59,7 @@ const address = [
         <StaticContent content={content!.content} locale={locale} />
       </header>
       <div class="contact-grid">
+        <InquiryForm locale={locale} />
         <aside class="contact-aside">
           <h2>{t.contact.panel.contactTitle}</h2>
           <p>{t.inquiry.form.messageHint}</p>
@@ -78,7 +79,6 @@ const address = [
           )}
           {!site.contact.email && <p>{t.contact.panel.unconfiguredMailbox}</p>}
         </aside>
-        <InquiryForm locale={locale} />
       </div>
     </div>
   ) : (
