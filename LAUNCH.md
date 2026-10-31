@@ -43,7 +43,7 @@
 
 - 预览与生产使用各自的 Upstash 数据库和 Airtable base/table，各自的 `APP_ENV`（限流键以它为前缀）。预览测试不能写入生产 CRM 或联系真实客户。
 - Turnstile、Resend 可以同账号，但预览的主机名和收件箱要与生产分开登记。
-- 预览要用独立的 Worker：在 `wrangler.jsonc` 加 `env.preview`，给它自己的 `name`、`vars` 和路由。环境在构建时选定，用 `CLOUDFLARE_ENV=preview npm run build && npx wrangler deploy` 部署（不要给 `wrangler deploy` 加 `--env`）；secret 用 `npx wrangler secret put <NAME> --name <预览 Worker 名>` 单独设置。Workers 自带的版本预览 URL 用的是生产 Worker 的 secret 和 `vars`，不算独立预览。
+- 预览要用独立的 Worker：在 `wrangler.jsonc` 加 `env.preview`，给它自己的 `name`、`vars` 和路由。`env.preview` 的 `vars` 只到达 Worker 运行时，不改变写进页面的 `PUBLIC_*` 值，所以预览的公开构建值要放进独立的 `.env.preview`：`PUBLIC_APP_ENV=experiment`、预览域名的 `PUBLIC_SITE_URL` 和预览 Turnstile widget 的 `PUBLIC_TURNSTILE_SITE_KEY`。环境和 mode 都在构建时选定，用 `CLOUDFLARE_ENV=preview npm run build -- --mode preview && npx wrangler deploy` 部署（不要给 `wrangler deploy` 加 `--env`）；不带 `--mode preview` 时构建会读取 `.env.production`，把生产域名、可索引的 robots 和生产分析配置写进预览页面。secret 用 `npx wrangler secret put <NAME> --name <预览 Worker 名>` 单独设置。Workers 自带的版本预览 URL 用的是生产 Worker 的 secret 和 `vars`，不算独立预览。
 
 ## 4. 供应商与域名
 
