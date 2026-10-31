@@ -557,7 +557,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
             assert.match(html, /<link rel="canonical" href="https:\/\/supplier\.co\.uk\/"/);
             const built = (file) => readFileSync(join(fixture, 'dist/client', file), 'utf8');
             // Tests read the site config with the build's own env: the configured origin.
-            const { locales, pages, pathFor, canonical } = await loadSite(fixture, {});
+            const { locales, pages, pathFor, canonical } = await loadSite(fixture, env);
             assert.equal(canonical('en', 'home'), 'https://supplier.co.uk/');
             const ogLocale = { en: 'en_US', es: 'es_ES' };
             for (const locale of locales) {

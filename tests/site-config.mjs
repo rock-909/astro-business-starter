@@ -11,14 +11,15 @@ export const testBuildEnv = {
 
 // Loads `src/site.ts` (pages, locales, identity and copy) the way `astro build` does, so
 // tests derive expected pages and wording from the checkout instead of pinning the
-// template's. Public values resolve like the build: `env` over the shell over
+// template's. Public values resolve like the build: its environment over
 // `.env.production` over `.env`, PUBLIC_ prefix only.
 /**
  * @param {string} [root] checkout holding `src/site.ts`
- * @param {Record<string, string>} [env] values the build forced over the shell
+ * @param {NodeJS.ProcessEnv} [env] the whole environment the build ran with
  */
-export async function loadSite(root = '.', env = testBuildEnv) {
+export async function loadSite(root = '.', env = { ...process.env, ...testBuildEnv }) {
   const shell = { ...process.env };
+  for (const key of Object.keys(process.env)) delete process.env[key];
   Object.assign(process.env, env);
   let server;
   try {
@@ -32,7 +33,7 @@ export async function loadSite(root = '.', env = testBuildEnv) {
       appType: 'custom',
     });
   } finally {
-    for (const key of Object.keys(process.env)) if (!(key in shell)) delete process.env[key];
+    for (const key of Object.keys(process.env)) delete process.env[key];
     Object.assign(process.env, shell);
   }
   try {
