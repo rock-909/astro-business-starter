@@ -1126,6 +1126,35 @@ test('the language pill offers the browser language once consent is settled, swi
   await context.close();
 });
 
+test('dismissing the language pill holds for the page when storage refuses writes', async ({
+  browser,
+  baseURL,
+  site,
+}) => {
+  const [first, second] = [homeLocale(site), secondLocale(site)];
+  test.skip(!second, 'single-language site: nothing to suggest');
+  const context = await browser.newContext({ baseURL, locale: first });
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException('Storage disabled', 'SecurityError');
+    };
+  });
+  const suggested = site.messages(first).languageSuggestion;
+  const pill = page.getByRole('region', { name: suggested.label });
+  const cookie = site.messages(second!).cookie;
+  await page.goto(site.pathFor(second!, 'privacy'));
+  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
+  await expect(pill).toBeVisible();
+  await pill.getByRole('button', { name: suggested.dismiss, exact: true }).click();
+  await expect(pill).toBeHidden();
+  // Reopening and settling cookie settings re-syncs the pill; the dismissal still holds.
+  await page.getByRole('button', { name: cookie.settings, exact: true }).click();
+  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
+  await expect(pill).toBeHidden();
+  await context.close();
+});
+
 test('choosing a language in the header is remembered, so the pill does not offer the one just left', async ({
   browser,
   baseURL,

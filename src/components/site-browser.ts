@@ -209,7 +209,9 @@ syncTheme();
 
 // Language suggestion: when the browser prefers another registered language that this page
 // also exists in, a pill offers it. Never at the same time as the cookie card.
+let chosenLocale: string | null = null;
 function rememberLocale(locale: string) {
+  chosenLocale = locale;
   try {
     localStorage.setItem('preferred-locale', locale);
   } catch {
@@ -229,6 +231,7 @@ function matchLocale(tag: string) {
   );
 }
 function preferredLocale() {
+  if (chosenLocale) return chosenLocale;
   try {
     const remembered = localStorage.getItem('preferred-locale');
     if (remembered && pageLocales.includes(remembered)) return remembered;
@@ -264,7 +267,9 @@ document.addEventListener('click', (event) => {
   if (link && !event.defaultPrevented) rememberLocale(link.dataset.localeLink!);
 });
 window.addEventListener('storage', (event) => {
-  if (event.key === null || event.key === 'preferred-locale') syncLanguageSuggestion();
+  if (event.key !== null && event.key !== 'preferred-locale') return;
+  chosenLocale = null;
+  syncLanguageSuggestion();
 });
 if (suggestionArea)
   // Footer space so the pill never covers the last controls when scrolled to the end.
