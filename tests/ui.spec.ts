@@ -30,21 +30,20 @@ async function withLongCompanyEmail(page: Page, site: Site) {
     async (route) => {
       if (route.request().resourceType() !== 'document') return route.continue();
       const response = await route.fetch();
-      const link = `<a href="mailto:${longEmail}">${longEmail}</a>`;
-      const methods = `<div class="contact-methods">${link}</div>`;
+      const { pathname } = new URL(route.request().url());
+      const locale = site.locales.find((code) => contactPath(site, code) === pathname)!;
+      const link = `<a class="text-link" href="mailto:${longEmail}">${longEmail}</a>`;
+      const title = escapeHtml(site.messages(locale).contact.panel.contactTitle);
+      const methods = `<section class="contact-methods" aria-labelledby="contact-methods"><h2 id="contact-methods">${title}</h2>${link}</section>`;
       let html = await response.text();
-      const unconfigured = site.locales
-        .map(
-          (locale) =>
-            `<p>${escapeHtml(site.messages(locale).contact.panel.unconfiguredMailbox)}</p>`,
-        )
-        .find((paragraph) => html.includes(paragraph));
-      const configured = /<div class="contact-methods">[\s\S]*?<\/div>/;
-      if (configured.test(html)) {
-        html = html.replace(configured, methods);
-        if (unconfigured) html = html.replace(unconfigured, '');
-      } else if (unconfigured) html = html.replace(unconfigured, methods);
-      else html = html.replace('</aside>', `${methods}</aside>`);
+      // A configured block is replaced; the template has none, so one goes where it would render.
+      const configured = /<section class="contact-methods"[\s\S]*?<\/section>/;
+      if (configured.test(html)) html = html.replace(configured, methods);
+      else
+        html = html.replace(
+          '</div><div class="page-aside">',
+          `${methods}</div><div class="page-aside">`,
+        );
       if (!/class="fallback"[^>]*>[^<]*<a [^>]*href="mailto:/.test(html))
         html = html.replace('</form>', `</form><p class="fallback">${link}</p>`);
       await route.fulfill({ response, body: html });
@@ -93,6 +92,20 @@ const tokenColor = (page: Page, name: string) =>
   page.evaluate(
     (name) => window.rgba(getComputedStyle(document.documentElement).getPropertyValue(name)).join(),
     name,
+  );
+// The inquiry status box's background, border and text, and those of one callout tone.
+const calloutColors = (page: Page) =>
+  page.locator('[data-form-status]').evaluate((box) => {
+    const style = getComputedStyle(box);
+    return [style.backgroundColor, style.borderTopColor, style.color].map((color) =>
+      window.rgba(color).join(),
+    );
+  });
+const toneColors = async (page: Page, tone: 'info' | 'success' | 'warning' | 'error') =>
+  Promise.all(
+    [`--${tone}-muted`, `--${tone}-border`, `--${tone}-foreground`].map((name) =>
+      tokenColor(page, name),
+    ),
   );
 // Colour transitions run 150ms; read a state only once they have finished.
 const settled = (page: Page) =>
@@ -164,12 +177,22 @@ test('configured contact methods, logo and social links render; unconfigured one
   for (const locale of site.locales) {
     await page.goto(contactPath(site, locale));
     const main = page.getByRole('main');
+    // The contact details block exists only when a method is configured (a heading and links).
+    const details = main.getByRole('region', {
+      name: site.messages(locale).contact.panel.contactTitle,
+      exact: true,
+    });
+    const address = Object.values(site.site.company?.location ?? {}).some(Boolean);
+    await expect(details).toHaveCount(
+      contact.email || contact.phone || contact.whatsapp || address ? 1 : 0,
+    );
     if (contact.email)
-      // Scoped to the contact aside: the form's fallback line repeats the mailbox and
+      // Scoped to the contact details: the form's fallback line repeats the mailbox and
       // would otherwise hide a missing contact method.
-      await expect(
-        main.locator('.contact-aside').getByRole('link', { name: contact.email, exact: true }),
-      ).toHaveAttribute('href', `mailto:${contact.email}`);
+      await expect(details.getByRole('link', { name: contact.email, exact: true })).toHaveAttribute(
+        'href',
+        `mailto:${contact.email}`,
+      );
     else await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
     const phone = main.locator('a[href^="tel:"]');
     if (contact.phone) {
@@ -232,6 +255,14 @@ test('unknown routes give localized 404 recovery rather than false business page
     const goHome = page.getByRole('link', { name: notFound.goHome });
     expect((await goHome.boundingBox())!.height).toBe(40);
     expect((await contact.boundingBox())!.height).toBe(40);
+    // Centred like the reference site: the title and the pair of buttons share the page's middle.
+    const middle = page.viewportSize()!.width / 2;
+    const title = (await page.getByRole('heading', { level: 1 }).boundingBox())!;
+    expect(Math.abs(title.x + title.width / 2 - middle)).toBeLessThan(2);
+    const first = (await goHome.boundingBox())!;
+    const last = (await contact.boundingBox())!;
+    expect(Math.abs((first.x + last.x + last.width) / 2 - middle)).toBeLessThan(2);
+    await expect(contact).toHaveClass(/\boutline\b/);
     await goHome.click();
     await expect(page).toHaveURL(home);
     await page.goto(`${home === '/' ? '' : home}/missing-offering`);
@@ -329,6 +360,8 @@ test('every language submits to the real Action and requires fresh verification'
     expect(JSON.parse((await request).postData()!).fullName).toBe('Browser Buyer');
     await expect(page.locator('[data-form-status]')).toContainText('INQ-');
     await expect(page.locator('[data-form-status] strong')).toHaveText(f.statusPrefix.success);
+    await expect(page.locator('[data-form-status]')).toHaveAttribute('data-state', 'success');
+    expect(await calloutColors(page)).toEqual(await toneColors(page, 'success'));
     await expect(page.getByLabel(f.fullName, { exact: true })).toHaveValue('');
     await expect(submit).toBeDisabled();
     await page.getByRole('button', { name: '[Test] Complete verification', exact: true }).click();
@@ -450,7 +483,7 @@ test('contact pages reflow on phones without horizontal scrolling', async ({ pag
   await expect(page.locator('[data-submit]')).toHaveText(t.inquiry.form.submit);
 });
 
-test('a long company email fits phone widths, keeps the compact widget and keeps form-first Tab order', async ({
+test('a long company email fits phone widths, the widget fits its column, and the contact details come before the form', async ({
   page,
   site,
 }) => {
@@ -467,31 +500,43 @@ test('a long company email fits phone widths, keeps the compact widget and keeps
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
         `${path} at ${width}px`,
       ).toBe(true);
-      expect(
-        await page.evaluate(
-          () => (window as unknown as { __turnstileOptions: { size?: string } }).__turnstileOptions,
-        ),
-      ).toMatchObject({ size: 'compact' });
+      // The 300px widget only when its column fits it; compact on narrower phones (320px).
+      const slot = await page
+        .locator('[data-turnstile]')
+        .evaluate((element) => element.clientWidth);
+      const size = await page.evaluate(
+        () =>
+          (window as unknown as { __turnstileOptions: { size?: string } }).__turnstileOptions.size,
+      );
+      expect(size, `${path} at ${width}px, ${slot}px column`).toBe(
+        slot < 300 ? 'compact' : undefined,
+      );
+      if (width === 320) expect(size).toBe('compact');
     }
   }
-  // Phone: the form is shown first, so keyboard focus must reach it before the contact links.
+  // Phone: page text, then the contact details, then the form; Tab follows the same order.
   const f = form(site, homeLocale(site));
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto(contactPath(site, homeLocale(site)));
   await dismissConsent(page, site);
   const fullName = page.getByLabel(f.fullName, { exact: true });
-  const asideEmail = page.locator('.contact-methods a');
-  expect((await fullName.boundingBox())!.y).toBeLessThan((await asideEmail.boundingBox())!.y);
+  const detailsEmail = page.locator('.contact-methods a');
+  const title = page.getByRole('heading', { level: 1 });
+  expect((await title.boundingBox())!.y).toBeLessThan((await detailsEmail.boundingBox())!.y);
+  expect((await detailsEmail.boundingBox())!.y).toBeLessThan((await fullName.boundingBox())!.y);
   const order: string[] = [];
   for (let presses = 0; presses < 40 && order.length < 2; presses++) {
     await page.keyboard.press('Tab');
     if (await fullName.evaluate((field) => field === document.activeElement)) order.push('form');
-    if (await asideEmail.evaluate((link) => link === document.activeElement)) order.push('aside');
+    if (await detailsEmail.evaluate((link) => link === document.activeElement))
+      order.push('details');
   }
-  expect(order).toEqual(['form', 'aside']);
-  // Wide screens keep the direct contact column on the left of the form.
+  expect(order).toEqual(['details', 'form']);
+  // Wide screens: text and details on the left, the form on the right, both starting at the top.
   await page.setViewportSize({ width: 1280, height: 900 });
-  expect((await asideEmail.boundingBox())!.x).toBeLessThan((await fullName.boundingBox())!.x);
+  expect((await detailsEmail.boundingBox())!.x).toBeLessThan((await fullName.boundingBox())!.x);
+  const formTop = (await page.locator('#inquiry').boundingBox())!.y;
+  expect(Math.abs(formTop - (await title.boundingBox())!.y)).toBeLessThan(2);
 });
 
 test('header marks the current page and language alike; links and buttons react to hover in both themes', async ({
@@ -654,21 +699,29 @@ test('footer links are grey without an underline and darken on hover; in-content
   expect(await look(inContent)).toMatchObject({ underline: 'underline', decoration: foreground });
 });
 
-test('contact aside has its own line instead of repeating the message hint', async ({
+test('contact details hold a heading and the configured links only, and the form has no card or title', async ({
   page,
   site,
 }) => {
-  const { contact } = site.site;
-  const methods = Boolean(contact.email || contact.phone || contact.whatsapp);
+  await withLongCompanyEmail(page, site);
   for (const locale of site.locales) {
-    const hint = form(site, locale).messageHint;
+    const t = site.messages(locale);
     await page.goto(contactPath(site, locale));
-    await expect(page.locator('#message-hint')).toContainText(hint);
-    const aside = page.locator('.contact-aside');
-    await expect(aside).not.toContainText(hint);
-    // The intro leads into configured contact methods and is absent without them.
-    const intro = aside.getByText(site.messages(locale).contact.panel.intro, { exact: true });
-    await expect(intro).toHaveCount(methods ? 1 : 0);
+    const details = page.getByRole('region', { name: t.contact.panel.contactTitle, exact: true });
+    // No lead-in sentence: every paragraph-level child is the heading, a link or the address.
+    expect(
+      await details.evaluate((section) =>
+        [...section.children].every((child) => /^(H2|A|ADDRESS)$/.test(child.tagName)),
+      ),
+    ).toBe(true);
+    const inquiry = page.getByRole('region', { name: t.inquiry.form.contactAriaLabel });
+    await expect(inquiry.getByRole('heading')).toHaveCount(0);
+    expect(
+      await inquiry.evaluate((section) => {
+        const style = getComputedStyle(section);
+        return [style.borderTopStyle, style.backgroundColor, style.paddingTop];
+      }),
+    ).toEqual(['none', 'rgba(0, 0, 0, 0)', '0px']);
   }
 });
 
@@ -680,7 +733,7 @@ test('long words in headings wrap at 320px instead of widening the page', async 
   for (const locale of site.locales) {
     for (const [key, level] of [
       ['home', 1],
-      ['contact', 2],
+      ['contact', 1],
     ] as const) {
       const path = site.pathFor(locale, key);
       await page.goto(path);
@@ -721,6 +774,9 @@ test('security check reads as loading, then stays quiet while the challenge wait
     await page.goto(contactPath(site, locale), { waitUntil: 'domcontentloaded' });
     const status = page.locator('[data-verification-status]');
     await expect(status).toContainText(turnstile.loading);
+    const colour = () =>
+      status.evaluate((note) => window.rgba(getComputedStyle(note).color).join());
+    expect(await colour()).toBe(await tokenColor(page, '--muted-foreground'));
     release();
     await expect.poll(() => page.evaluate(() => '__turnstileOptions' in window)).toBe(true);
     await expect(status).toHaveText('');
@@ -731,6 +787,8 @@ test('security check reads as loading, then stays quiet while the challenge wait
       ]!(),
     );
     await expect(status).toContainText(turnstile.unavailable);
+    // Failure reads in the error colour, keeping the specific next step in the wording.
+    expect(await colour()).toBe(await tokenColor(page, '--error-foreground'));
   }
 });
 
@@ -941,7 +999,6 @@ test('every registered page is linked from its navigation, and content pages use
       await page.goto(site.pathFor(locale, key));
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(content.metadata.title);
       await expect(page.getByRole('navigation', { name: t.legal.tableOfContents })).toHaveCount(0);
-      await expect(page.getByRole('main')).not.toContainText(t.legal.lastUpdated);
       await expect(page.getByRole('main').locator('time')).toHaveCount(0);
     }
   // The template ships legal pages only; the derived fixture adds a content page.
@@ -1070,22 +1127,111 @@ test('the theme select shows the current theme and the header brand follows the 
   }
 });
 
-test('legal pages show the last-updated date in the page language', async ({ page, site }) => {
-  // Long dates as each language writes them, independent of the formatter the page uses.
-  const longDate: Record<string, RegExp> = {
-    en: /^[A-Z][a-z]+ \d{1,2}, \d{4}$/,
-    es: /^\d{1,2} de [a-z]+ de \d{4}$/,
-  };
+test('page shells put the description under the title, show no date, and give legal sections a contents card', async ({
+  page,
+  site,
+}) => {
   for (const locale of site.locales)
-    for (const key of ['privacy', 'terms'] as const) {
+    for (const { key, kind } of site.pages.filter(({ kind }) => kind !== 'home')) {
+      const content = site.pageContent(locale, key as Exclude<typeof key, 'home'>);
+      const sections = [...content.content.matchAll(/^## (.+)$/gm)].length;
+      const toc = page.getByRole('navigation', {
+        name: site.messages(locale).legal.tableOfContents,
+      });
+      for (const width of [375, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(site.pathFor(locale, key));
+        const main = page.getByRole('main');
+        const title = main.getByRole('heading', { level: 1 });
+        if (content.metadata.description) {
+          const description = main.getByText(content.metadata.description, { exact: true });
+          await expect(description).toBeVisible();
+          expect((await description.boundingBox())!.y).toBeGreaterThan(
+            (await title.boundingBox())!.y,
+          );
+        }
+        // Like the reference site, no "last updated" line or date is shown.
+        await expect(main.locator('time')).toHaveCount(0);
+        // One 720px column (24px gutters), the contact page widening for its form.
+        const column = await main.locator('.page-narrow').boundingBox();
+        expect(column!.width).toBeLessThanOrEqual(kind === 'contact' && width >= 1024 ? 1080 : 720);
+        if (kind !== 'legal' || sections === 0) {
+          await expect(toc).toHaveCount(0);
+          continue;
+        }
+        await expect(toc.getByRole('link')).toHaveCount(sections);
+        const card = (await toc.boundingBox())!;
+        const text = (await main.locator('.prose').boundingBox())!;
+        // Beside the text from 1024px, above it on phones.
+        if (width >= 1024) expect(card.x).toBeGreaterThan(text.x + text.width - 1);
+        else expect(card.y).toBeLessThan(text.y);
+      }
+    }
+});
+
+test('a page FAQ renders every answer as plain HTML and as FAQPage structured data', async ({
+  page,
+  site,
+}) => {
+  let pagesWithFaq = 0;
+  for (const locale of site.locales)
+    for (const { key } of site.pages.filter(({ key }) => key !== 'home')) {
+      const faq = site.pageContent(locale, key as Exclude<typeof key, 'home'>).metadata.faq;
       await page.goto(site.pathFor(locale, key));
-      const time = page.locator('.legal-note time');
-      if (longDate[locale]) await expect(time).toHaveText(longDate[locale]);
-      await expect(time).toHaveAttribute(
-        'datetime',
-        site.pageContent(locale, key).metadata.updatedAt,
+      const section = page.getByRole('region', { name: site.messages(locale).legal.faq });
+      const graph: Array<Record<string, unknown>> = JSON.parse(
+        await page.locator('script[type="application/ld+json"]').innerHTML(),
+      )['@graph'];
+      const structured = graph.find((node) => node['@type'] === 'FAQPage');
+      if (!faq?.length) {
+        await expect(section).toHaveCount(0);
+        expect(structured).toBeUndefined();
+        continue;
+      }
+      pagesWithFaq++;
+      await expect(section.getByRole('heading', { level: 3 })).toHaveText(
+        faq.map((item) => item.question),
+      );
+      // Not an accordion: every answer is on screen without any interaction.
+      for (const item of faq)
+        await expect(section.getByText(item.answer, { exact: true })).toBeVisible();
+      await expect(section.locator('details, button')).toHaveCount(0);
+      expect(structured!.mainEntity).toEqual(
+        faq.map((item) => ({
+          '@type': 'Question',
+          name: item.question,
+          acceptedAnswer: { '@type': 'Answer', text: item.answer },
+        })),
       );
     }
+  // The template ships no FAQ; the derived fixture adds one to its About page.
+  test.info().annotations.push({ type: 'pages with FAQ', description: String(pagesWithFaq) });
+});
+
+test('the home page is one 720px column with a 36px title and an underlined contact link', async ({
+  page,
+  site,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const locale of site.locales) {
+    const t = site.messages(locale);
+    await page.goto(site.pathFor(locale, 'home'));
+    const main = page.getByRole('main');
+    const title = main.getByRole('heading', { level: 1 });
+    await expect(title).toHaveText(t.home.title);
+    expect(await title.evaluate((h1) => getComputedStyle(h1).fontSize)).toBe('36px');
+    expect((await main.locator('.page-narrow').boundingBox())!.width).toBeLessThanOrEqual(720);
+    const contact = main.getByRole('link', { name: t.home.contactLink, exact: true });
+    await expect(contact).toHaveAttribute('href', contactPath(site, locale));
+    // A text link, not a filled button.
+    expect(
+      await contact.evaluate((link) => {
+        const style = getComputedStyle(link);
+        return [style.textDecorationLine, style.backgroundColor];
+      }),
+    ).toEqual(['underline', 'rgba(0, 0, 0, 0)']);
+    await expect(main.getByRole('button')).toHaveCount(0);
+  }
 });
 
 test('keyboard and assistive tech never reach the honeypot field', async ({ page, site }) => {
@@ -1186,6 +1332,7 @@ test('pending submission locks buyer edits and duplicate Enter, then clears only
   // Screen readers hear the wait, and focus is kept on the announcement instead of the page body.
   await expect(page.locator('[data-form-status]')).toHaveText(f.submitting);
   await expect(page.locator('[data-form-status]')).toBeFocused();
+  expect(await calloutColors(page)).toEqual(await toneColors(page, 'info'));
   await expect(page.getByLabel(f.fullName, { exact: true })).toBeDisabled();
   await expect(page.getByLabel(f.email, { exact: true })).toBeDisabled();
   await expect(page.getByLabel(messageLabel(site, locale), { exact: true })).toBeDisabled();
@@ -1257,6 +1404,7 @@ test('server canonical validation maps an email rejection to localized field and
   await expect(page.getByText(f.errors.email.invalid, { exact: true })).toBeVisible();
   await expect(email).toBeFocused();
   await expect(page.locator('[data-form-status] strong')).toHaveText(f.statusPrefix.error);
+  expect(await calloutColors(page)).toEqual(await toneColors(page, 'error'));
   await expect(email).toHaveValue('+buyer@example.test');
 });
 
@@ -1445,7 +1593,8 @@ test('active inquiry field boundaries have at least 3:1 contrast in both themes'
           return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
         };
         const style = getComputedStyle(element);
-        const card = getComputedStyle(element.closest('.inquiry-card')!);
+        // The form sits on the page itself, without a card.
+        const surface = getComputedStyle(document.body);
         const border = luminance(style.borderColor);
         const contrast = (background: string) => {
           const adjacent = luminance(background);
@@ -1454,14 +1603,14 @@ test('active inquiry field boundaries have at least 3:1 contrast in both themes'
         return {
           border: style.borderColor,
           field: style.backgroundColor,
-          card: card.backgroundColor,
+          page: surface.backgroundColor,
           fieldRatio: contrast(style.backgroundColor),
-          cardRatio: contrast(card.backgroundColor),
+          pageRatio: contrast(surface.backgroundColor),
         };
       });
       measurements.push({ theme, name, ...colors });
       expect(colors.fieldRatio).toBeGreaterThanOrEqual(3);
-      expect(colors.cardRatio).toBeGreaterThanOrEqual(3);
+      expect(colors.pageRatio).toBeGreaterThanOrEqual(3);
     }
   }
   await test.info().attach('active-field-contrast', {

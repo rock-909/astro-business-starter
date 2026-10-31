@@ -3,6 +3,8 @@ import type { ContentPage } from '../../site';
 const contactPage = {
   metadata: {
     title: 'Contacto',
+    description:
+      'Página de contacto de referencia con la información mínima que debe sustituir una empresa real.',
     updatedAt: '2026-08-06',
     seo: {
       title: 'Contacto — Sitio de referencia para consultas',

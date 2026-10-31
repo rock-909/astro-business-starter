@@ -1,0 +1,21 @@
+---
+import { messages, type FaqItem, type Locale } from '../../site';
+interface Props {
+  items: FaqItem[] | undefined;
+  locale: Locale;
+}
+const { items, locale } = Astro.props;
+---
+
+{/* Every answer is visible as plain HTML, matching the FAQPage structured data. */}
+{items?.length ? (
+  <section class="page-faq" aria-labelledby="page-faq">
+    <h2 id="page-faq">{messages(locale).legal.faq}</h2>
+    {items.map((item) => (
+      <div>
+        <h3>{item.question}</h3>
+        <p>{item.answer}</p>
+      </div>
+    ))}
+  </section>
+) : null}

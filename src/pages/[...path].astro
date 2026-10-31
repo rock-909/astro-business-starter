@@ -2,6 +2,7 @@
 import SiteLayout from '../layouts/SiteLayout.astro';
 import InquiryForm from '../components/InquiryForm.astro';
 import StaticContent from '../components/content/StaticContent.astro';
+import FaqSection from '../components/content/FaqSection.astro';
 import {
   locales,
   pages,
@@ -38,6 +39,7 @@ const address = [
 ]
   .filter(Boolean)
   .join(', ');
+// Without any configured method the whole block stays out, like the reference site.
 const hasContactMethods = Boolean(
   site.contact.email || site.contact.phone || site.contact.whatsapp || address,
 );
@@ -45,72 +47,54 @@ const hasContactMethods = Boolean(
 
 <SiteLayout locale={locale} page={page} title={title} description={description}>
   {kind === 'home' ? (
-    <section class="wrap hero">
+    <section class="page-narrow home">
       <h1>{t.home.title}</h1>
-      <p class="hero-copy">{t.home.description}</p>
-      <a class="button" href={pathFor(locale, 'contact')}>
+      <p class="page-description">{t.home.description}</p>
+      <a class="text-link home-contact" href={pathFor(locale, 'contact')}>
         {t.home.contactLink}
       </a>
-      <div class="hero-rule">
-        <strong>{t.home.ruleLabel}</strong>
-        <span>{t.home.metadata.description}</span>
-      </div>
     </section>
-  ) : kind === 'contact' ? (
-    <div class="wrap">
-      <header class="page-head">
-        <h1>{content!.metadata.title}</h1>
-        <StaticContent content={content!.content} locale={locale} />
-      </header>
-      <div class="contact-grid">
-        <InquiryForm locale={locale} />
-        <aside class="contact-aside">
-          <h2>{t.contact.panel.contactTitle}</h2>
-          {hasContactMethods && <p>{t.contact.panel.intro}</p>}
-          {hasContactMethods && (
-            <div class="contact-methods">
-              {site.contact.email && (
-                <a class="text-link" href={`mailto:${site.contact.email}`}>
-                  {site.contact.email}
-                </a>
-              )}
-              {site.contact.phone && (
-                <a class="text-link" href={`tel:${site.contact.phone}`}>
-                  {site.contact.phone}
-                </a>
-              )}
-              {site.contact.whatsapp && (
-                <a
-                  class="text-link"
-                  href={`https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}`}
-                >
-                  WhatsApp {site.contact.whatsapp}
-                </a>
-              )}
-              {address && <address>{address}</address>}
-            </div>
-          )}
-          {!site.contact.email && <p>{t.contact.panel.unconfiguredMailbox}</p>}
-        </aside>
-      </div>
-    </div>
-  ) : kind === 'content' ? (
-    <article class="wrap content-page">
-      <h1>{content!.metadata.title}</h1>
-      <StaticContent content={content!.content} locale={locale} />
-    </article>
   ) : (
-    <article class="wrap legal-page">
-      <h1>{content!.metadata.title}</h1>
-      <StaticContent content={content!.content} locale={locale} showToc />
-      <p class="legal-note">
-        {t.legal.lastUpdated}:{' '}
-        <time datetime={content!.metadata.updatedAt}>
-          {new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(
-            new Date(content!.metadata.updatedAt),
+    <div class:list={['page-narrow', { 'page-split': kind === 'contact' }]}>
+      <div class="page-main">
+        <header class="page-header">
+          <h1>{content!.metadata.title}</h1>
+          {content!.metadata.description && (
+            <p class="page-description">{content!.metadata.description}</p>
           )}
-        </time>
-      </p>
-    </article>
+        </header>
+        <StaticContent content={content!.content} locale={locale} showToc={kind === 'legal'} />
+        <FaqSection items={content!.metadata.faq} locale={locale} />
+        {kind === 'contact' && hasContactMethods && (
+          <section class="contact-methods" aria-labelledby="contact-methods">
+            <h2 id="contact-methods">{t.contact.panel.contactTitle}</h2>
+            {site.contact.email && (
+              <a class="text-link" href={`mailto:${site.contact.email}`}>
+                {site.contact.email}
+              </a>
+            )}
+            {site.contact.phone && (
+              <a class="text-link" href={`tel:${site.contact.phone}`}>
+                {site.contact.phone}
+              </a>
+            )}
+            {site.contact.whatsapp && (
+              <a
+                class="text-link"
+                href={`https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}`}
+              >
+                WhatsApp {site.contact.whatsapp}
+              </a>
+            )}
+            {address && <address>{address}</address>}
+          </section>
+        )}
+      </div>
+      {kind === 'contact' && (
+        <div class="page-aside">
+          <InquiryForm locale={locale} />
+        </div>
+      )}
+    </div>
   )}
 </SiteLayout>

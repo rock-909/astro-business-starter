@@ -30,11 +30,22 @@ function syncButton() {
     (form.elements.namedItem(name) as HTMLInputElement).disabled = pending;
 }
 function report(text: string, state: 'error' | 'success') {
-  // The prefix keeps success and failure distinct without relying on colour.
   const prefix = document.createElement('strong');
   prefix.textContent = copy.statusPrefix[state];
   status.replaceChildren(prefix, ` ${text}`);
   status.dataset.state = state;
+}
+// The status box takes the reference site's four tones; the text prefix carries the
+// outcome for success and error without relying on colour.
+function inform(text: string) {
+  status.textContent = text;
+  status.dataset.state = 'info';
+}
+// Failures read in the error colour, an expired check as a warning, progress stays grey.
+function verificationNote(text: string, tone?: 'error' | 'warning') {
+  verification.textContent = text;
+  if (tone) verification.dataset.tone = tone;
+  else delete verification.dataset.tone;
 }
 function resetVerification() {
   token = '';
@@ -42,7 +53,7 @@ function resetVerification() {
     try {
       globals.turnstile?.reset(widget);
     } catch {
-      verification.textContent = copy.turnstile.unavailable;
+      verificationNote(copy.turnstile.unavailable, 'error');
     }
   }
   syncButton();
@@ -67,7 +78,7 @@ for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-locale-li
     if (link.dataset.localeLink === form.dataset.locale) return;
     if (pending) {
       event.preventDefault();
-      status.textContent = copy.localePending;
+      inform(copy.localePending);
       status.focus();
       return;
     }
@@ -82,7 +93,7 @@ for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-locale-li
 }
 function renderWidget() {
   if (!globals.turnstile) {
-    verification.textContent = copy.turnstile.loadFailed;
+    verificationNote(copy.turnstile.loadFailed, 'error');
     return;
   }
   try {
@@ -95,41 +106,41 @@ function renderWidget() {
       language: form.dataset.locale,
       callback: (value: string) => {
         token = value;
-        verification.textContent = '';
+        verificationNote('');
         syncButton();
       },
       'expired-callback': () => {
         token = '';
-        verification.textContent = copy.turnstile.expired;
+        verificationNote(copy.turnstile.expired, 'warning');
         syncButton();
       },
       'error-callback': () => {
         token = '';
-        verification.textContent = copy.turnstile.unavailable;
+        verificationNote(copy.turnstile.unavailable, 'error');
         syncButton();
       },
       'timeout-callback': () => {
         token = '';
-        verification.textContent = copy.turnstile.expired;
+        verificationNote(copy.turnstile.expired, 'warning');
         syncButton();
       },
     });
     // The widget is on screen and prompts for itself; only failures need words here.
-    if (verification.textContent === copy.turnstile.loading) verification.textContent = '';
+    if (verification.textContent === copy.turnstile.loading) verificationNote('');
   } catch {
-    verification.textContent = copy.turnstile.unavailable;
+    verificationNote(copy.turnstile.unavailable, 'error');
   }
 }
-if (!siteKey) verification.textContent = copy.turnstile.unavailable;
+if (!siteKey) verificationNote(copy.turnstile.unavailable, 'error');
 else {
-  verification.textContent = copy.turnstile.loading;
+  verificationNote(copy.turnstile.loading);
   const script = document.createElement('script');
   script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
   script.async = true;
   script.defer = true;
   script.addEventListener('load', renderWidget);
   script.addEventListener('error', () => {
-    verification.textContent = copy.turnstile.loadFailed;
+    verificationNote(copy.turnstile.loadFailed, 'error');
   });
   document.head.append(script);
 }
@@ -174,8 +185,7 @@ form.addEventListener('submit', async (event) => {
   }
   pending = true;
   // Announce the wait and keep focus off <body> while the button and fields are disabled.
-  status.textContent = copy.submitting;
-  delete status.dataset.state;
+  inform(copy.submitting);
   if (form.contains(document.activeElement)) status.focus();
   syncButton();
   let timer: ReturnType<typeof setTimeout> | undefined;

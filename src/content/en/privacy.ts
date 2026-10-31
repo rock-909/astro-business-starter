@@ -3,6 +3,7 @@ import type { ContentPage } from '../../site';
 const privacyPage = {
   metadata: {
     title: 'Privacy policy — to be completed',
+    description: 'Incomplete placeholder. The site operator must replace this before launch.',
     updatedAt: '2026-08-06',
     seo: {
       title: 'Privacy policy — to be completed',

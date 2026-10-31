@@ -3,6 +3,8 @@ import type { ContentPage } from '../../site';
 const privacyPage = {
   metadata: {
     title: 'Privacidad — pendiente de completar',
+    description:
+      'Texto provisional incompleto. El responsable debe sustituirlo antes del lanzamiento.',
     updatedAt: '2026-08-06',
     seo: {
       title: 'Privacidad — pendiente de completar',

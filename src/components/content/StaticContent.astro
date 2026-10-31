@@ -9,74 +9,82 @@ interface Props {
 }
 const { content, locale, showToc = false } = Astro.props;
 const blocks = parseStaticMarkdownBlocks(content);
-const headings = blocks.filter((block) => block.kind === 'heading');
+// Like the reference site, the contents list names the sections (h2) only.
+const tocHeadings = showToc
+  ? blocks.flatMap((block) => (block.kind === 'heading' && block.level === 'h2' ? [block] : []))
+  : [];
+const tocLabel = messages(locale).legal.tableOfContents;
 ---
 
-{showToc && headings.length > 0 && (
-  <nav class="content-toc" aria-label={messages(locale).legal.tableOfContents}>
-    <h2>{messages(locale).legal.tableOfContents}</h2>
-    <ul>
-      {headings.map((heading) => (
-        <li>
-          <a href={`#${heading.id}`}>{heading.displayText}</a>
-        </li>
-      ))}
-    </ul>
-  </nav>
-)}
-<div class="prose">
-  {blocks.map((block) => {
-    if (block.kind === 'heading') {
-      const Tag = block.level;
-      return <Tag id={block.id}>{block.displayText}</Tag>;
-    }
-    if (block.kind === 'paragraph')
-      return (
-        <p>
-          {block.emphasized ? (
-            <strong>
-              <InlineMarkdown text={block.text} locale={locale} />
-            </strong>
-          ) : (
-            <InlineMarkdown text={block.text} locale={locale} />
-          )}
-        </p>
-      );
-    if (block.kind === 'list') {
-      const Tag = block.ordered ? 'ol' : 'ul';
-      return (
-        <Tag>
-          {block.items.map((item) => (
+<div class:list={['static-content', { 'has-toc': tocHeadings.length > 0 }]}>
+  {tocHeadings.length > 0 && (
+    <aside class="content-toc">
+      <h2>{tocLabel}</h2>
+      <nav aria-label={tocLabel}>
+        <ol>
+          {tocHeadings.map((heading) => (
             <li>
-              <InlineMarkdown text={item} locale={locale} />
+              <a href={`#${heading.id}`}>{heading.displayText}</a>
             </li>
           ))}
-        </Tag>
-      );
-    }
-    return (
-      <div class="content-table" role="region" aria-label={block.headers.join(', ')} tabindex="0">
-        <table>
-          <thead>
-            <tr>
-              {block.headers.map((header) => (
-                <th scope="col">{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {block.rows.map((row) => (
+        </ol>
+      </nav>
+    </aside>
+  )}
+  <div class="prose">
+    {blocks.map((block) => {
+      if (block.kind === 'heading') {
+        const Tag = block.level;
+        return <Tag id={block.id}>{block.displayText}</Tag>;
+      }
+      if (block.kind === 'paragraph')
+        return (
+          <p>
+            {block.emphasized ? (
+              <strong>
+                <InlineMarkdown text={block.text} locale={locale} />
+              </strong>
+            ) : (
+              <InlineMarkdown text={block.text} locale={locale} />
+            )}
+          </p>
+        );
+      if (block.kind === 'list') {
+        const Tag = block.ordered ? 'ol' : 'ul';
+        return (
+          <Tag>
+            {block.items.map((item) => (
+              <li>
+                <InlineMarkdown text={item} locale={locale} />
+              </li>
+            ))}
+          </Tag>
+        );
+      }
+      return (
+        <div class="content-table" role="region" aria-label={block.headers.join(', ')} tabindex="0">
+          <table>
+            <thead>
               <tr>
-                {block.headers.map((_, index) => (
-                  <td>
-                    <InlineMarkdown text={row[index] || ''} locale={locale} />
-                  </td>
+                {block.headers.map((header) => (
+                  <th scope="col">{header}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  })}
+            </thead>
+            <tbody>
+              {block.rows.map((row) => (
+                <tr>
+                  {block.headers.map((_, index) => (
+                    <td>
+                      <InlineMarkdown text={row[index] || ''} locale={locale} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    })}
+  </div>
 </div>
