@@ -35,12 +35,14 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
       'normalized shared payload, explicit IDs, exact Airtable fields, no security/unknown leakage',
       async () => {
         reset();
+        const { locales, localeTable } = await loadSite();
+        const locale = locales.at(-1);
         const response = await action(h, {
           ...validInput,
           fullName: '  =Alex\tBuyer\u202e  ',
           email: 'Alex+Quote@EXAMPLE.COM',
           message: '  =SUM(A1)\r\n width < 900mm & "quoted"\n\n\nlast ',
-          locale: 'es',
+          locale,
           utmSource: 'supplier',
           landingPage: '/contact',
           capturedAt: '2026-10-24T00:00:00.000Z',
@@ -64,7 +66,7 @@ test('actual built Astro Action in pinned workerd: security and delivery contrac
         assert.equal(airtable['Last Name'], 'Buyer');
         assert.equal(airtable.Requirements, '\'=SUM(A1)\nwidth < 900mm & "quoted"\n\nlast');
         assert.match(email.html, /width &lt; 900mm &amp; &quot;quoted&quot;/);
-        assert.match(email.text, /Language: Español/);
+        assert.ok(email.text.includes(`Language: ${localeTable[locale].name}`), email.text);
         assert.match(email.text, /gclid: Click_123/);
         assert.equal(airtable.Source, 'Website Inquiry');
         assert.equal(airtable.Status, 'New');
