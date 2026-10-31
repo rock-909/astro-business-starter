@@ -14,7 +14,7 @@
    PUBLIC_APP_ENV=production npm run build
    ```
 
-`readiness` 会拒绝：缺失或哨兵配置值、模板 Worker 名、模板身份、未完成的法律文案、`messages.json` 与 `contact.ts` 里残留的模板措辞（如 “non-production”“Inquiry site”“Sitio de consultas”“EN / ES”“sitio de referencia”）、`public/` 下不存在的根相对品牌文件（`brandAssets.ogImage`、`brandAssets.favicon`、`brandAssets.logo.horizontal`），以及仍是模板分享图（图上写着 “Non-production reference site”）的 `brandAssets.ogImage`。`PUBLIC_APP_ENV` 只接受 `production` 或 `experiment`，`Production`、`prod` 等写法会让构建直接失败。通过只说明配置前提齐全，不证明凭证有效、绑定已到 Cloudflare 或邮件已送达。
+`readiness` 会拒绝：缺失或哨兵配置值、模板 Worker 名、模板身份、未审阅或未完成的法律文案（每种登记语言）、缺少的语言内容文件、`messages.json` 与非法律页面模块（如 `contact.ts`）里残留的模板措辞（如 “non-production”“Inquiry site”“Sitio de consultas”“EN / ES”“sitio de referencia”）、`public/` 下不存在的根相对品牌文件（`brandAssets.ogImage`、`brandAssets.favicon`、`brandAssets.logo.horizontal`），以及仍是模板分享图（图上写着 “Non-production reference site”）的 `brandAssets.ogImage`。`PUBLIC_APP_ENV` 只接受 `production` 或 `experiment`，`Production`、`prod` 等写法会让构建直接失败。通过只说明配置前提齐全，不证明凭证有效、绑定已到 Cloudflare 或邮件已送达。
 
 4. 部署：
 

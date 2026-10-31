@@ -63,6 +63,7 @@
   },
   "home": {
     "metadata": {
+      "title": "Sitio de consultas | Astro Business Starter",
       "description": "Un sitio de referencia de consultas no destinado a producción, con identidad, dominio y datos de contacto de ejemplo."
     },
     "title": "Sitio de consultas",

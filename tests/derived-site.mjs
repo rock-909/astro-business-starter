@@ -1,9 +1,12 @@
 // A derived site as owners usually configure one: contact methods, a logo, social
-// links, company facts and rewritten copy. Tests run against its build as well as the
+// links, company facts and rewritten copy. It also makes the two structural changes an
+// owner makes in src/site-routes.ts: it drops Spanish (English only) and adds a generic
+// About page, so a single-language site with an extra page must build and pass. Tests run against its build as well as the
 // template's, so neither the layouts only derived sites render nor template wording can
 // hide from CI. Sentinel domains only; nothing here is contacted.
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -13,8 +16,12 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
+import { localeTable, pages } from '../src/site-routes.ts';
 
 export const derivedRoot = 'dist/derived-site';
+// The language the fixture removes; its content directory is not copied at all.
+const removedLocale = 'es';
+const keptLocales = Object.keys(localeTable).filter((locale) => locale !== removedLocale);
 
 const identity = {
   name: 'Northwind Valves',
@@ -38,7 +45,10 @@ const identity = {
     favicon: '/brand/favicon.svg',
     logo: { status: 'ready', horizontal: '/brand/logo.svg', width: 160, height: 40 },
   },
-  readiness: { ownerConfirmedIdentity: false, legalReviewed: { en: false, es: false } },
+  readiness: {
+    ownerConfirmedIdentity: false,
+    legalReviewed: Object.fromEntries(keptLocales.map((locale) => [locale, false])),
+  },
   seo: {
     titleTemplate: '%s | Northwind Valves',
     defaultTitle: 'Northwind Valves',
@@ -70,9 +80,27 @@ export const minimalPng = Buffer.concat([
 ]);
 // The template's own brand files, left out so the fixture cannot pass on them.
 const templateBrandFiles = ['opengraph-image.png', 'opengraph-image.svg', 'icon.svg'];
+const aboutPage = {
+  metadata: {
+    title: 'About Northwind Valves',
+    updatedAt: '2026-10-01',
+    seo: {
+      title: 'About us',
+      description: 'Who makes Northwind valves and where they ship from.',
+    },
+  },
+  content:
+    '## Our workshop\n\nNorthwind Valves has machined valves in Leeds since 2004.\n\n## Where we ship\n\nWater utilities across the UK. [Ask for a quote](/contact).',
+};
+// Edits src/site-routes.ts the way an owner would, failing loudly if the registry moved.
+const replaceOnce = (text, pattern, replacement) => {
+  if (!pattern.test(text)) throw new Error(`Derived fixture cannot find ${pattern} in site-routes`);
+  return text.replace(pattern, replacement);
+};
 const copy = {
   en: {
     messages: {
+      'home.metadata.title': 'Northwind Valves — valves for water networks',
       'home.title': 'Valves for water networks',
       'home.eyebrow': 'Northwind Valves',
       'home.description': 'Gate, ball and check valves, shipped from Leeds.',
@@ -86,26 +114,6 @@ const copy = {
       'cookie.rejectAll': 'Decline optional cookies',
     },
     pages: { contact: 'Talk to our sales team', privacy: 'Privacy notice', terms: 'Terms of sale' },
-  },
-  es: {
-    messages: {
-      'home.title': 'Válvulas para redes de agua',
-      'home.eyebrow': 'Northwind Valves',
-      'home.description': 'Válvulas de compuerta, bola y retención, enviadas desde Leeds.',
-      'home.ruleLabel': 'Desde 2004',
-      'contact.panel.intro': '¿Prefiere hablar? Contacte con nuestro equipo en Leeds.',
-      'inquiry.form.statusPrefix.success': 'Enviado:',
-      'inquiry.form.statusPrefix.error': 'Problema:',
-      'navigation.contactSales': 'Solicitar presupuesto',
-      'inquiry.form.fullName': 'Tu nombre',
-      'inquiry.form.submit': 'Enviar solicitud',
-      'cookie.rejectAll': 'Rechazar cookies opcionales',
-    },
-    pages: {
-      contact: 'Habla con ventas',
-      privacy: 'Aviso de privacidad',
-      terms: 'Condiciones de venta',
-    },
   },
 };
 
@@ -132,9 +140,26 @@ export function writeDerivedSite(repo = '.') {
     cpSync(resolve(repo, name), join(root, name), {
       recursive: true,
       filter: (source) =>
-        name !== 'public' ||
-        !templateBrandFiles.some((file) => source === resolve(repo, 'public', file)),
+        source !== resolve(repo, 'src/content', removedLocale) &&
+        (name !== 'public' ||
+          !templateBrandFiles.some((file) => source === resolve(repo, 'public', file))),
     });
+  const routes = join(root, 'src/site-routes.ts');
+  let registry = readFileSync(routes, 'utf8');
+  if (removedLocale in localeTable)
+    registry = replaceOnce(registry, new RegExp(`^ *${removedLocale}: \\{.*\\},\\n`, 'm'), '');
+  if (!pages.some(({ key }) => key === 'about'))
+    registry = replaceOnce(
+      registry,
+      /^( *\{ key: 'contact'.*\n)/m,
+      `$1  { key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true },\n`,
+    );
+  writeFileSync(routes, registry);
+  for (const locale of keptLocales) {
+    const file = join(root, `src/content/${locale}/about.ts`);
+    if (!existsSync(file))
+      writeFileSync(file, `export default ${JSON.stringify(aboutPage, null, 2)};\n`);
+  }
   writeFileSync(join(root, 'package.json'), JSON.stringify({ type: 'module', private: true }));
   symlinkSync(resolve(repo, 'node_modules'), join(root, 'node_modules'), 'dir');
   writeFileSync(join(root, 'src/site-data.json'), JSON.stringify(identity, null, 2));

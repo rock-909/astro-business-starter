@@ -11,6 +11,7 @@ import {
   pageContent,
   type Locale,
   type PageKey,
+  type PageKind,
 } from '../site';
 
 export const prerender = true;
@@ -24,8 +25,11 @@ export function getStaticPaths() {
 }
 const { locale, page } = Astro.props as { locale: Locale; page: PageKey };
 const t = messages(locale);
+// Widened on purpose: a derived site may register kinds the template does not use.
+const kind = pages.find((item) => item.key === page)!.kind as PageKind;
 const content = page === 'home' ? undefined : pageContent(locale, page);
-const title = content?.metadata.seo.title || site.name;
+// Each language titles its own home page; the identity default is only the fallback.
+const title = content?.metadata.seo.title || t.home.metadata.title || site.seo.defaultTitle;
 const description = content?.metadata.seo.description || t.home.metadata.description;
 const address = [
   site.company?.location?.address,
@@ -40,7 +44,7 @@ const hasContactMethods = Boolean(
 ---
 
 <SiteLayout locale={locale} page={page} title={title} description={description}>
-  {page === 'home' ? (
+  {kind === 'home' ? (
     <section class="wrap hero">
       <p class="eyebrow">{t.home.eyebrow}</p>
       <h1>{t.home.title}</h1>
@@ -53,7 +57,7 @@ const hasContactMethods = Boolean(
         <span>{t.home.metadata.description}</span>
       </div>
     </section>
-  ) : page === 'contact' ? (
+  ) : kind === 'contact' ? (
     <div class="wrap">
       <header class="page-head">
         <p class="eyebrow">{t.navigation.contactSales}</p>
@@ -83,6 +87,11 @@ const hasContactMethods = Boolean(
         </aside>
       </div>
     </div>
+  ) : kind === 'content' ? (
+    <article class="wrap content-page">
+      <h1>{content!.metadata.title}</h1>
+      <StaticContent content={content!.content} locale={locale} />
+    </article>
   ) : (
     <article class="wrap legal-page">
       <p class="eyebrow">{t.footer.columns.support}</p>

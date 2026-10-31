@@ -61,10 +61,9 @@ async function dismissConsent(page: Page, site: Site) {
 const form = (site: Site, locale: Locale) => site.messages(locale).inquiry.form;
 const messageLabel = (site: Site, locale: Locale) =>
   `${form(site, locale).message} (${form(site, locale).optional})`;
-// The language switcher shows each language's upper-case code and speaks its own name.
-const languageNames: Record<string, string> = { en: 'English', es: 'Español' };
-const languageLink = (page: Page, locale: Locale) =>
-  page.getByRole('link', { name: languageNames[locale], exact: true });
+// The language switcher shows each language's registered label and speaks its own name.
+const languageLink = (page: Page, site: Site, locale: Locale) =>
+  page.getByRole('link', { name: site.localeTable[locale].name, exact: true });
 // Brand names the footer gives each configured social network.
 const socialNames = { linkedin: 'LinkedIn', twitter: 'X' };
 const homeLocale = (site: Site) => site.locales[0];
@@ -99,6 +98,12 @@ test('every configured page has localized HTML, reciprocal SEO and truthful noin
       expect(response?.request().redirectedFrom(), `${path} must not redirect`).toBeNull();
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+      if (key === 'home') {
+        // Each language titles its own home page, for search results and share cards.
+        const title = site.messages(locale).home.metadata.title || site.site.seo.defaultTitle;
+        await expect(page).toHaveTitle(title);
+        await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', title);
+      }
       expect(await page.locator('main').count()).toBe(1);
       const canonical = await page.locator('link[rel=canonical]').getAttribute('href');
       expect(new URL(canonical!).pathname).toBe(path);
@@ -216,7 +221,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await page
     .getByLabel(messageLabel(site, first), { exact: true })
     .fill('Keep this inquiry\nwith its second line.');
-  await languageLink(page, second!).click();
+  await languageLink(page, site, second!).click();
   await expect(page).toHaveURL(`${contactPath(site, second!)}?utm_source=locale-test#inquiry`);
   await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
     'Alex Buyer',
@@ -227,7 +232,7 @@ test('locale switch preserves route, query, hash and unsent buyer fields', async
   await expect(page.getByLabel(messageLabel(site, second!), { exact: true })).toHaveValue(
     'Keep this inquiry\nwith its second line.',
   );
-  await languageLink(page, first).click();
+  await languageLink(page, site, first).click();
   await expect(page.getByLabel(form(site, first).fullName, { exact: true })).toHaveValue(
     'Alex Buyer',
   );
@@ -469,9 +474,10 @@ test('header marks the current page and language alike; links and buttons react 
   await page.goto(site.pathFor(locale, 'home'));
   await dismissConsent(page, site);
   // Current items: foreground colour and a 2px underline; the others stay plain until hover.
+  const multilingual = site.locales.length > 1;
   for (const selector of [
     `.main-nav a[href="${site.pathFor(locale, 'home')}"]`,
-    `.language-nav a[lang="${locale}"]`,
+    ...(multilingual ? [`.language-nav a[lang="${locale}"]`] : []),
   ])
     expect(await decoration(selector), selector).toBe('underline 2px');
   for (const selector of [
@@ -755,18 +761,157 @@ test('a pointer click that leaves focus on the page still hands focus back after
   await expect(trigger).toBeFocused();
 });
 
-test('language links have 24px phone targets and spoken language names', async ({ page, site }) => {
+test('language links have 24px phone targets and spoken language names; one language shows none', async ({
+  page,
+  site,
+}) => {
+  if (site.locales.length === 1) {
+    // Nothing to switch to: no lone language link and no empty language navigation.
+    await page.goto(site.pathFor(homeLocale(site), 'home'));
+    await expect(
+      page.getByRole('navigation', { name: site.messages(homeLocale(site)).navigation.language }),
+    ).toHaveCount(0);
+    await expect(page.locator('[data-locale-link]')).toHaveCount(0);
+    return;
+  }
   for (const width of [320, 375]) {
     await page.setViewportSize({ width, height: 812 });
     await page.goto(contactPath(site, secondLocale(site) ?? homeLocale(site)));
     for (const locale of site.locales) {
-      const link = languageLink(page, locale);
-      await expect(link).toHaveText(locale.toUpperCase());
+      const link = languageLink(page, site, locale);
+      await expect(link).toHaveText(site.localeTable[locale].label);
       const box = (await link.boundingBox())!;
       expect(box.width, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
       expect(box.height, `${locale} at ${width}px`).toBeGreaterThanOrEqual(24);
     }
   }
+});
+
+test('every registered page is linked from its navigation, and content pages use the plain layout', async ({
+  page,
+  site,
+}) => {
+  for (const locale of site.locales) {
+    const t = site.messages(locale);
+    await page.goto(site.pathFor(locale, 'home'));
+    const main = page.getByRole('navigation', { name: t.accessibility.mainNavigation });
+    const footer = page.getByRole('contentinfo');
+    for (const entry of site.pages) {
+      const { key } = entry;
+      const href = site.pathFor(locale, key);
+      const nav = 'nav' in entry ? entry.nav : undefined;
+      const where = `${locale} ${key} ${nav ?? 'no nav'}`;
+      await expect(main.locator(`a[href="${href}"]`), where).toHaveCount(nav === 'main' ? 1 : 0);
+      await expect(footer.locator(`a[href="${href}"]`), where).toHaveCount(nav ? 1 : 0);
+    }
+  }
+  // Owner pages that are not legal text: no table of contents, no last-updated line.
+  const contentPages = site.pages.filter(({ kind }) => (kind as string) === 'content');
+  for (const locale of site.locales)
+    for (const { key } of contentPages) {
+      const t = site.messages(locale);
+      const content = site.pageContent(locale, key as Exclude<typeof key, 'home'>);
+      await page.goto(site.pathFor(locale, key));
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(content.metadata.title);
+      await expect(page.getByRole('navigation', { name: t.legal.tableOfContents })).toHaveCount(0);
+      await expect(page.getByRole('main')).not.toContainText(t.legal.lastUpdated);
+      await expect(page.getByRole('main').locator('time')).toHaveCount(0);
+    }
+  // The template ships legal pages only; the derived fixture adds a content page.
+  test.info().annotations.push({ type: 'content pages', description: String(contentPages.length) });
+});
+
+test('dark tokens match for the system preference and the explicit choice; main text pairs reach 4.5:1', async ({
+  page,
+  site,
+}) => {
+  await page.goto(site.pathFor(homeLocale(site), 'home'));
+  // Every custom property the stylesheets declare on :root, as the page resolves it.
+  const tokens = () =>
+    page.evaluate(() => {
+      const names = new Set<string>();
+      for (const sheet of document.styleSheets)
+        for (const rule of sheet.cssRules) {
+          const rules = rule instanceof CSSMediaRule ? [...rule.cssRules] : [rule];
+          for (const inner of rules)
+            if (inner instanceof CSSStyleRule && inner.selectorText.includes(':root'))
+              for (const name of inner.style) if (name.startsWith('--')) names.add(name);
+        }
+      const style = getComputedStyle(document.documentElement);
+      return Object.fromEntries(
+        [...names].sort().map((name) => [name, style.getPropertyValue(name).trim()]),
+      );
+    });
+  const theme = (value?: string) =>
+    page.evaluate((value) => {
+      if (value) document.documentElement.dataset.theme = value;
+      else delete document.documentElement.dataset.theme;
+    }, value);
+  const themes: Record<string, Record<string, string>> = {};
+  for (const [name, scheme, choice] of [
+    ['light (system)', 'light', undefined],
+    ['light (chosen over a dark system)', 'dark', 'light'],
+    ['dark (system)', 'dark', undefined],
+    ['dark (chosen over a light system)', 'light', 'dark'],
+  ] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await theme(choice);
+    themes[name] = await tokens();
+  }
+  expect(Object.keys(themes['dark (system)']!).length).toBeGreaterThan(5);
+  // The three token blocks must not drift apart: one edited, another forgotten.
+  expect(themes['dark (system)']).toEqual(themes['dark (chosen over a light system)']);
+  expect(themes['light (system)']).toEqual(themes['light (chosen over a dark system)']);
+  expect(themes['dark (system)']).not.toEqual(themes['light (system)']);
+  const ratios = await page.evaluate(
+    (themes) => {
+      const probe = document.createElement('span');
+      document.body.append(probe);
+      const luminance = (token: string, color: string) => {
+        probe.style.color = color;
+        const resolved = getComputedStyle(probe).color;
+        if (!/^rgba?\(/.test(resolved))
+          throw new Error(
+            `${token} resolves to ${resolved}; contrast needs an rgb()/rgba() colour`,
+          );
+        const values = resolved.match(/[\d.]+/g)!;
+        if (Number(values[3] ?? 1) < 1)
+          throw new Error(
+            `${token} resolves to non-opaque ${resolved}; contrast needs opaque colours`,
+          );
+        const channels = values.slice(0, 3).map((value) => {
+          const channel = Number(value) / 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+      };
+      const ratio = (tokens: Record<string, string>, a: string, b: string) => {
+        const [light, dark] = [luminance(a, tokens[a]!), luminance(b, tokens[b]!)].sort(
+          (x, y) => y - x,
+        );
+        return (light! + 0.05) / (dark! + 0.05);
+      };
+      const pairs = [
+        ['--on-primary', '--primary'],
+        ['--foreground', '--background'],
+        ['--muted', '--surface'],
+      ];
+      const result = Object.entries(themes).flatMap(([name, tokens]) =>
+        pairs.map(([text, background]) => ({
+          pair: `${name} ${text} on ${background}`,
+          ratio: ratio(tokens, text!, background!),
+        })),
+      );
+      probe.remove();
+      return result;
+    },
+    { light: themes['light (system)']!, dark: themes['dark (system)']! },
+  );
+  for (const { pair, ratio } of ratios) expect(ratio, pair).toBeGreaterThanOrEqual(4.5);
+  await test.info().attach('theme-token-contrast', {
+    body: JSON.stringify(ratios, null, 2),
+    contentType: 'application/json',
+  });
 });
 
 test('the theme select shows the current theme and the header brand follows the logo configuration', async ({
@@ -888,7 +1033,7 @@ test('session draft survives refresh and a legal-page round trip', async ({ page
   const longestMessage = 'M'.repeat(2000);
   await page.getByLabel(messageLabel(site, locale), { exact: true }).fill(longestMessage);
   await page.reload();
-  await languageLink(page, second).click();
+  await languageLink(page, site, second).click();
   await expect(page.getByLabel(messageLabel(site, second), { exact: true })).toHaveValue(
     longestMessage,
   );
@@ -925,7 +1070,7 @@ test('pending submission locks buyer edits and duplicate Enter, then clears only
   });
   const second = secondLocale(site);
   if (second) {
-    await languageLink(page, second).click();
+    await languageLink(page, site, second).click();
     await expect(page).toHaveURL(contactPath(site, locale));
     await expect(page.locator('[data-form-status]')).toContainText(f.localePending);
   }
@@ -1134,7 +1279,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   });
   await expect(page).toHaveURL(`${contactPath(site, first)}#inquiry`);
   await page.evaluate(() => history.replaceState(null, '', '?source=current#inquiry'));
-  await languageLink(page, second!).click();
+  await languageLink(page, site, second!).click();
   await expect(page).toHaveURL(`${contactPath(site, second!)}?source=current#inquiry`);
   await expect(page.getByLabel(form(site, second!).fullName, { exact: true })).toHaveValue(
     'Current Location Buyer',
@@ -1142,7 +1287,7 @@ test('locale switch uses the current hash and query after an in-page navigation'
   await expect(page.getByLabel(form(site, second!).email, { exact: true })).toHaveValue(
     'current@example.test',
   );
-  await languageLink(page, first).click();
+  await languageLink(page, site, first).click();
   await expect(page).toHaveURL(`${contactPath(site, first)}?source=current#inquiry`);
 });
 
@@ -1266,7 +1411,7 @@ test('storage denial keeps unsent details on the current language page', async (
     await page.goto(contactPath(site, locale));
     await dismissConsent(page, site);
     await page.getByLabel(f.fullName, { exact: true }).fill('Unsaved Buyer');
-    await languageLink(page, next).click();
+    await languageLink(page, site, next).click();
     await expect(page).toHaveURL(contactPath(site, locale));
     await expect(page.locator('[data-form-status]')).toContainText(f.localeStorageUnavailable);
     await expect(page.locator('[data-form-status]')).toBeFocused();
@@ -1355,7 +1500,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
   await page.evaluate(() =>
     history.replaceState(null, '', '?utm_source=LaterMarker&gclid=LaterClick#inquiry'),
   );
-  if (second) await languageLink(page, second).click();
+  if (second) await languageLink(page, site, second).click();
   await page.reload();
   expect(
     await page.evaluate(() => JSON.parse(sessionStorage.getItem('inquiry_attribution')!)),
@@ -1370,7 +1515,7 @@ test('first permitted attribution survives navigation, then withdrawal clears it
     .poll(() => page.evaluate(() => sessionStorage.getItem('inquiry_attribution')))
     .toBeNull();
   await page.reload();
-  if (second) await languageLink(page, first).click();
+  if (second) await languageLink(page, site, first).click();
   expect(await page.evaluate(() => sessionStorage.getItem('inquiry_attribution'))).toBeNull();
   await page.getByLabel(t.inquiry.form.fullName, { exact: true }).fill('Withdrawn Buyer');
   await page.getByLabel(t.inquiry.form.email, { exact: true }).fill('withdrawn@example.test');

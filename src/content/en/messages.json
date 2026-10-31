@@ -63,6 +63,7 @@
   },
   "home": {
     "metadata": {
+      "title": "Inquiry site | Astro Business Starter",
       "description": "A non-production inquiry reference site using sentinel identity, domain, and contact details."
     },
     "title": "Inquiry site",

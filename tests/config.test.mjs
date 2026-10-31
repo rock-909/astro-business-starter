@@ -18,6 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { assertValidSiteConfig } from '../src/site-schema.ts';
+import { locales } from '../src/site-routes.ts';
 import {
   launchEnv,
   readinessIssues,
@@ -102,7 +103,10 @@ const launchIdentity = {
   },
   company: { established: 2004 },
   contact: { email: 'sales@supplier.co.uk' },
-  readiness: { ownerConfirmedIdentity: true, legalReviewed: { en: true, es: true } },
+  readiness: {
+    ownerConfirmedIdentity: true,
+    legalReviewed: Object.fromEntries(locales.map((locale) => [locale, true])),
+  },
 };
 const htmlEntities = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 // Built HTML text or attribute value with HTML character references undone.
@@ -136,20 +140,64 @@ const productionPrerequisites = {
   RATE_LIMIT_PEPPER: 'abcdefghijklmnopqrstuvwxyz0123456789',
 };
 
-test('EN and ES messages define the same keys with the same value shapes', () => {
-  // Browser copy is typed from EN only, so a missing ES key would otherwise pass `npm run check`.
+test('every registered language defines the same message keys with the same value shapes', () => {
+  // Copy is typed from EN only, so a missing key in another language would pass `npm run check`.
   const shapes = (value, path = '') =>
     value && typeof value === 'object'
       ? Object.entries(value).flatMap(([key, child]) => shapes(child, `${path}/${key}`))
       : [`${path}: ${typeof value}`];
-  const [en, es] = ['en', 'es'].map((locale) =>
-    shapes(
+  const [reference, ...others] = locales.map((locale) => ({
+    locale,
+    keys: shapes(
       JSON.parse(
         readFileSync(new URL(`../src/content/${locale}/messages.json`, import.meta.url), 'utf8'),
       ),
     ).sort(),
-  );
-  assert.deepEqual(es, en);
+  }));
+  for (const { locale, keys } of others) assert.deepEqual(keys, reference.keys, locale);
+});
+
+test('legal approval is recorded once per registered language, no more and no fewer', () => {
+  const approved = (legalReviewed) => ({
+    ...identity,
+    readiness: { ownerConfirmedIdentity: true, legalReviewed },
+  });
+  const all = Object.fromEntries(locales.map((locale) => [locale, true]));
+  assert.deepEqual(assertValidSiteConfig(approved(all)).readiness.legalReviewed, all);
+  // A language left over after it was removed, or one never approved, is a config error.
+  assert.throws(() => assertValidSiteConfig(approved({ ...all, xx: true })), /"xx"/);
+  for (const locale of locales) {
+    const { [locale]: _, ...rest } = all;
+    assert.throws(
+      () => assertValidSiteConfig(approved(rest)),
+      new RegExp(`legalReviewed\\.${locale}`),
+    );
+    const issues = readinessIssues({}, approved({ ...all, [locale]: false }));
+    assert.deepEqual(
+      issues.filter((issue) => issue.includes('legal pages must')),
+      [`The ${locale} legal pages must be reviewed and approved`],
+    );
+  }
+});
+
+test('readiness names a registered page or language whose content is missing instead of crashing', () => {
+  const fixture = launchFixture();
+  try {
+    const [locale] = locales;
+    rmSync(join(fixture, `src/content/${locale}/terms.ts`));
+    rmSync(join(fixture, `src/content/${locale}/messages.json`));
+    const issues = readinessIssues(
+      productionPrerequisites,
+      launchIdentity,
+      pathToFileURL(`${fixture}/`),
+    );
+    assert.deepEqual(issues, [
+      `src/content/${locale}/messages.json is missing`,
+      `src/content/${locale}/terms.ts is missing`,
+    ]);
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 test('optional company facts are validated and consumed without requiring an organization', async () => {
@@ -433,7 +481,7 @@ test('both launch gates read Wrangler vars, mode dotenv files and the shell, nev
 });
 
 test('real Astro builds use dotenv, mode files and shell precedence for launch readiness', async (suite) => {
-  const root = resolve('.');
+  const checkout = resolve('.');
   for (const scenario of [
     {
       name: 'dotenv-only production is refused',
@@ -513,9 +561,22 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
       ready: true,
       blocked: false,
     },
+    {
+      // The derived fixture registers English only and an extra About page.
+      name: 'a single-language derived site with an added page passes the production gate',
+      root: resolve(derivedRoot),
+      files: {
+        '.env': Object.entries(productionPrerequisites)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n'),
+      },
+      ready: true,
+      blocked: false,
+    },
   ]) {
     await suite.test(scenario.name, async () => {
       const fixture = mkdtempSync(join(tmpdir(), 'astro-config-'));
+      const root = scenario.root ?? checkout;
       try {
         for (const name of [
           'src',
@@ -532,7 +593,15 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
         for (const [file, text] of Object.entries(scenario.files))
           writeFileSync(join(fixture, file), text);
         if (scenario.ready) {
-          writeFileSync(join(fixture, 'src/site-data.json'), JSON.stringify(launchIdentity));
+          // Approves exactly the languages this copy ships.
+          const legalReviewed = Object.fromEntries(contentLocales(fixture).map((l) => [l, true]));
+          writeFileSync(
+            join(fixture, 'src/site-data.json'),
+            JSON.stringify({
+              ...launchIdentity,
+              readiness: { ...launchIdentity.readiness, legalReviewed },
+            }),
+          );
           writeLaunchCopy(fixture);
         }
         const env = {
@@ -578,10 +647,12 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
             assert.match(html, /<link rel="canonical" href="https:\/\/supplier\.co\.uk\/"/);
             const built = (file) => readFileSync(join(fixture, 'dist/client', file), 'utf8');
             // Tests read the site config with the build's own env: the configured origin.
-            const { locales, pages, pathFor, canonical } = await loadSite(fixture, env);
+            const { locales, localeTable, pages, pathFor, canonical } = await loadSite(
+              fixture,
+              env,
+            );
             for (const locale of locales)
               assert.equal(new URL(canonical(locale, 'home')).origin, 'https://supplier.co.uk');
-            const ogLocale = { en: 'en_US', es: 'es_ES' };
             for (const locale of locales) {
               const page = built(join(pathFor(locale, 'home'), 'index.html').slice(1));
               assert.ok(
@@ -589,13 +660,21 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
                 locale,
               );
               assert.ok(
-                page.includes(`<meta property="og:locale" content="${ogLocale[locale]}"`),
+                page.includes(
+                  `<meta property="og:locale" content="${localeTable[locale].ogLocale}"`,
+                ),
+                locale,
+              );
+              // Alternates name the other registered languages only, none on a one-language site.
+              assert.equal(
+                page.match(/property="og:locale:alternate"/g)?.length ?? 0,
+                locales.length - 1,
                 locale,
               );
               for (const other of locales.filter((other) => other !== locale))
                 assert.ok(
                   page.includes(
-                    `<meta property="og:locale:alternate" content="${ogLocale[other]}"`,
+                    `<meta property="og:locale:alternate" content="${localeTable[other].ogLocale}"`,
                   ),
                   `${locale} alternate ${other}`,
                 );
@@ -630,7 +709,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
                 alternates.some(([, language]) => language === 'x-default'),
                 entry,
               );
-              assert.ok(alternates.length >= 3, entry);
+              assert.equal(alternates.length, locales.length + 1, entry);
               for (const [, , href] of alternates) assert.ok(locs.includes(href), href);
             }
             const client = readdirSync(join(fixture, 'dist/client'), {
