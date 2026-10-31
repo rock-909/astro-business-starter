@@ -269,6 +269,10 @@ test('on a phone, every Tab stop up to the footer stays clear of the open cookie
     await page.goto(path);
     const banner = page.getByRole('region', { name: title });
     await expect(banner).toBeVisible();
+    // A person sees a rendered frame before pressing Tab; headless navigation may not have one yet.
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
     const stops: string[] = [];
     let reachedFooterEnd = false;
     for (let step = 0; step < 80; step++) {
