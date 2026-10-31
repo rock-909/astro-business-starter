@@ -64,6 +64,13 @@
 body {
   margin: 0;
 }
+/* Keep keyboard focus and the last footer controls above the open cookie card (WCAG 2.4.11). */
+html:has([data-cookie-banner]:not([hidden])) {
+  scroll-padding-bottom: var(--cookie-banner-space, 0px);
+}
+html:has([data-cookie-banner]:not([hidden])) body {
+  padding-bottom: var(--cookie-banner-space, 0px);
+}
 a {
   color: inherit;
   text-underline-offset: 0.22em;
@@ -494,6 +501,7 @@ textarea[aria-invalid='true'] {
 }
 .footer-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 20px;
 }

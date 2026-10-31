@@ -81,8 +81,11 @@ function renderWidget() {
     return;
   }
   try {
-    widget = globals.turnstile.render(form.querySelector<HTMLElement>('[data-turnstile]')!, {
+    const slot = form.querySelector<HTMLElement>('[data-turnstile]')!;
+    widget = globals.turnstile.render(slot, {
       sitekey: siteKey,
+      // The fixed 300px "normal" widget overflows narrow phones (WCAG 1.4.10).
+      ...(slot.clientWidth < 300 ? { size: 'compact' } : {}),
       action: 'product_inquiry',
       language: form.dataset.locale,
       callback: (value: string) => {
