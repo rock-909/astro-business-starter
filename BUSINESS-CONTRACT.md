@@ -31,8 +31,8 @@ The reference has Home, Contact, Privacy and Terms in English and Spanish, not a
 
 - 200 `application/json+devalue`: `actions.inquiry()` decodes `{success:true,referenceId}`.
 - 400 canonical fields: supported `ActionError.message` JSON `{code:'INQUIRY_VALIDATION_FAILED',fields:[...]}`; client allowlists fields and uses localized copy, never raw provider text.
-- 400 TURNSTILE_REQUIRED/REJECTED; 503 TURNSTILE_UNAVAILABLE/DELIVERY_UNCONFIRMED; 429 RATE_LIMIT_EXCEEDED plus actual Retry-After.
-- Admission: 403 bad origin, 415 media, 400 malformed/nonobject, 413 oversized. Unknown Action 404. Static page POST native-form invocation 405 precedes app execution; dynamic native invocations still pass middleware.
+- 400 TURNSTILE_REQUIRED/REJECTED; 503 TURNSTILE_UNAVAILABLE/DELIVERY_UNCONFIRMED; 429 RATE_LIMIT_EXCEEDED plus actual Retry-After. Any other handler exception gives 500 INTERNAL_ERROR, never its raw message.
+- Admission: 403 bad origin, 415 media, 400 malformed/nonobject, 413 oversized. Unknown Action 404. Static page POST native-form invocation 405 precedes app execution; native `?_action=` invocations on on-demand routes get 404 from middleware without processing.
 - Browser uses a conservative 60-second rate cooldown; API reports the actual Upstash TTL, or the 60-second native window when the pre-check refuses. Unrecognized/lost result stays unknown, not confirmed failure or success.
 
 ## Unchanged safety and proof boundaries
