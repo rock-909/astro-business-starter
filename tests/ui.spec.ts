@@ -984,6 +984,8 @@ test('the cookie card stays on screen at 400% zoom and in landscape, scrolling i
       await page.goto(path);
       const banner = page.locator('[data-cookie-banner]');
       await banner.getByRole('button', { name: cookie.customize, exact: true }).click();
+      // The card rises 0.5rem as it enters; measure where it comes to rest.
+      await settled(page);
       const box = (await banner.boundingBox())!;
       expect(box.y, `${path} at ${width}x${height} card top`).toBeGreaterThanOrEqual(0);
       expect(box.y + box.height).toBeLessThanOrEqual(height);
