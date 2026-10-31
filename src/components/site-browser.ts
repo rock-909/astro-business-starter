@@ -12,6 +12,8 @@ const gaId = document.body.dataset.gaId || '';
 let gaInitialized = false;
 const globals = window as unknown as Record<string, unknown>;
 let gtag: ((...args: unknown[]) => void) | undefined;
+// The control that reopened the card, so a choice can hand keyboard focus back to it.
+let opener: HTMLElement | null = null;
 
 function signals(consent: Consent) {
   return {
@@ -92,9 +94,14 @@ function choose(consent: Consent) {
     /* The choice still applies to this document. */
   }
   applyConsent(consent);
+  const hadFocus = banner.contains(document.activeElement);
   banner.hidden = true;
+  if (hadFocus && opener?.isConnected) opener.focus();
+  opener = null;
 }
 function reopen() {
+  if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body)
+    opener = document.activeElement;
   try {
     localStorage.removeItem('cookie-consent');
   } catch {

@@ -1,13 +1,14 @@
 {
   "theme": {
-    "switchToLight": "Cambiar al tema claro",
-    "switchToDark": "Cambiar al tema oscuro",
-    "switchToSystem": "Usar el tema del sistema"
+    "system": "Sistema",
+    "light": "Claro",
+    "dark": "Oscuro"
   },
   "accessibility": {
     "skipToContent": "Ir al contenido principal",
     "mainNavigation": "Navegación principal",
     "themeSelector": "Selector de tema",
+    "opensInNewTab": "se abre en una pestaña nueva",
     "footerNavigation": "Navegación del pie de página"
   },
   "cookie": {

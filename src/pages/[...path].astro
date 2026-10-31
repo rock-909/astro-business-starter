@@ -88,7 +88,11 @@ const address = [
       <StaticContent content={content!.content} locale={locale} showToc />
       <p class="legal-note">
         {t.legal.lastUpdated}:{' '}
-        <time datetime={content!.metadata.updatedAt}>{content!.metadata.updatedAt}</time>
+        <time datetime={content!.metadata.updatedAt}>
+          {new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(
+            new Date(content!.metadata.updatedAt),
+          )}
+        </time>
       </p>
     </article>
   )}

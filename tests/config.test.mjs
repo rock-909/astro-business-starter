@@ -451,3 +451,61 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
     });
   }
 });
+
+test('a derived site with its own logo and social links renders them without template leftovers', () => {
+  const root = resolve('.');
+  const fixture = mkdtempSync(join(tmpdir(), 'astro-derived-'));
+  try {
+    for (const name of ['src', 'public', 'scripts', 'astro.config.mjs', 'tsconfig.json'])
+      cpSync(join(root, name), join(fixture, name), { recursive: true });
+    symlinkSync(join(root, 'node_modules'), join(fixture, 'node_modules'), 'dir');
+    writeFileSync(
+      join(fixture, 'src/site-data.json'),
+      JSON.stringify({
+        ...identity,
+        social: {
+          linkedin: 'https://www.linkedin.com/company/supplier',
+          twitter: 'https://x.com/supplier',
+        },
+        brandAssets: {
+          ...identity.brandAssets,
+          logo: { status: 'ready', horizontal: '/logo.svg', width: 160, height: 40 },
+        },
+      }),
+    );
+    const env = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1', PUBLIC_APP_ENV: 'experiment' };
+    const result = spawnSync(
+      process.execPath,
+      [join(root, 'node_modules/astro/bin/astro.mjs'), 'build'],
+      { cwd: fixture, env, encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024 },
+    );
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    for (const [file, newTab] of [
+      ['index.html', 'opens in a new tab'],
+      ['es/index.html', 'se abre en una pestaña nueva'],
+    ]) {
+      const html = readFileSync(join(fixture, 'dist/client', file), 'utf8');
+      // The header shows the configured logo alone, not next to the template's chat mark.
+      const brand = html.match(/<a class="brand"[^>]*>([\s\S]*?)<\/a>/)[1];
+      assert.match(brand, /<img src="\/logo\.svg"[^>]*alt="Astro Business Starter"/);
+      assert.doesNotMatch(html, /brand-mark/, file);
+      // Social links read as brand names; the arrow is decorative and the new tab is announced.
+      const spoken = (href) => {
+        const link = html.match(new RegExp(`<a href="${href}"[^>]*>([\\s\\S]*?)</a>`));
+        assert.ok(link, `${file} links ${href}`);
+        assert.match(link[0], /target="_blank"/);
+        assert.match(link[1], /<span aria-hidden="true">↗<\/span>/);
+        return link[1]
+          .replace(/<span aria-hidden="true">[^<]*<\/span>/g, '')
+          .replace(/<[^>]+>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
+      assert.equal(spoken('https://www.linkedin.com/company/supplier'), `LinkedIn (${newTab})`);
+      assert.equal(spoken('https://x.com/supplier'), `X (${newTab})`);
+    }
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
