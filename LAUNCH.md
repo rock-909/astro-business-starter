@@ -119,6 +119,7 @@
 | 表单草稿（姓名、邮箱、留言） | 填写表单时 | 浏览器 `sessionStorage` 的 `inquiry-draft`，不离开浏览器 | 当前标签页会话；确认成功后清除 |
 | 同意选择 | 访客做出选择 | 浏览器 `localStorage` 的 `cookie-consent` | 直到访客更改或清除 |
 | 主题偏好 | 访客切换主题 | 浏览器 `localStorage` 的 `theme` | 直到访客更改或清除 |
+| 语言选择 | 访客点语言切换链接、语言提示的切换或关闭 | 浏览器 `localStorage` 的 `preferred-locale`，不离开浏览器 | 直到访客更改或清除 |
 | gtag 脚本请求 | 生产构建、已设置 `PUBLIC_GA_MEASUREMENT_ID`，且访客同意分析或广告任一类（包括只同意广告） | 浏览器向 Google（`www.googletagmanager.com`）请求脚本，Google 会收到常规请求信息（如 IP、User-Agent） | 按 Google 的政策 |
 | GA4 页面浏览与 `generate_lead`、`contact_click` 事件 | 仅在生产构建、已设置 `PUBLIC_GA_MEASUREMENT_ID` 且访客同意分析后；只同意广告时 GA 被停用，不发送 | Google Analytics；页面地址与来源去掉查询串和 hash，事件不含买家资料 | 按 GA 属性设置；撤回分析同意会停用 GA 并清除 GA cookie |
 | Worker 日志 | 每次询盘处理 | Cloudflare Workers Logs：参考号、结果类别、通道标记，不含表单字段或 IP | 3 天（Free）或 7 天（Paid） |
