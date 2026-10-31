@@ -18,6 +18,11 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # TypeScript stays on 6.x; see the TypeScript exception in
+      # .claude/rules/dependencies.md. Remove this together with that exception.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
