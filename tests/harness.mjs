@@ -75,14 +75,24 @@ export async function startHarness({
           // This virtual module exists only in the test harness, never the build.
           contents: `
           import app from './entry.mjs';
-          export default { fetch(request, env, context) {
+          export default { async fetch(request, env, context) {
             if (request.headers.has('x-test-content-length')) {
               const headers = new Headers(request.headers);
               headers.set('content-length', headers.get('x-test-content-length'));
               headers.delete('x-test-content-length');
               request = new Request(request, { headers });
             }
-            return app.fetch(request, env, context);
+            // Makes a platform API throw a plain Error so the unchanged handler
+            // meets an unexpected (non-ActionError) exception.
+            const fault = request.headers.get('x-test-platform-fault');
+            if (!fault) return app.fetch(request, env, context);
+            const getRandomValues = crypto.getRandomValues;
+            crypto.getRandomValues = () => { throw new Error(fault); };
+            try {
+              return await app.fetch(request, env, context);
+            } finally {
+              crypto.getRandomValues = getRandomValues;
+            }
           }};
         `,
         },

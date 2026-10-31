@@ -505,6 +505,33 @@ test('rate-limit misconfiguration is logged apart from storage outages and still
   }
 });
 
+test('an unexpected handler exception returns INTERNAL_ERROR without leaking its message', async () => {
+  const h = await startHarness();
+  const marker = 'Invalid API key re_FIXTURE_CANARY';
+  try {
+    const response = await action(
+      h,
+      { website: 'bot.invalid' },
+      { headers: { 'x-test-platform-fault': marker } },
+    );
+    const body = await response.text();
+    assert.equal(response.status, 500);
+    assert.equal(JSON.parse(body).message, 'INTERNAL_ERROR');
+    assert.ok(!body.includes('re_FIXTURE_CANARY'), body);
+    assert.deepEqual(await logsMatching(h.state, /inquiry\.unexpected_error/), [
+      'inquiry.unexpected_error',
+    ]);
+    assert.ok(!h.state.logs.some(({ message }) => message.includes('re_FIXTURE_CANARY')));
+
+    const expected = await action(h, { ...validInput, turnstileToken: '' });
+    assert.equal(expected.status, 400);
+    assert.equal((await data(expected)).message, 'TURNSTILE_REQUIRED');
+    assert.equal(deliveries(h.state).length, 0);
+  } finally {
+    await h.close();
+  }
+});
+
 test('native rate-limit pre-check refuses an over-limit IP before the paid Upstash call', async () => {
   const h = await startHarness({ nativeLimit: 'deployed' });
   try {

@@ -48,6 +48,21 @@ Node 24.22.1, dependencies from `npm ci`. "Before" runs replace only `scripts/re
 
 `npm run verify` was not run in this fix round. None of these checks prove live Workers Logs, provider delivery or deployment.
 
+## Inquiry and configuration robustness (2026-10-30 UTC)
+
+Node 24.22.1. "Before" runs replace only `src/lib/inquiry.ts`, `src/middleware.ts`, `src/actions/index.ts`, `src/site-schema.ts`, `scripts/readiness.mjs` and `wrangler.jsonc` with main `2d5a885`, rebuild with `npm run build:test` and keep the current tests.
+
+| Check | Result |
+|---|---|
+| `npm test`, main `2d5a885` sources | Expected FAIL — 38 tests, 26 pass, 12 fail, including: ready production fixture `/missing` answers 500 instead of the localized 404 (ARCH-01); `/missing?_action=inquiry` answers 404 with `Retry-After: 60`, so the inquiry was processed (SEC-04); the `TURNSTILE_ALLOWED_HOSTS` variants, rate-limit configuration log, native pre-check, readiness hosts and founding-year tests |
+| `CI=1 npm run verify`, fixed sources | PASS — exit 0; `astro check` 0 errors, `npm test` 38/38, browser 28/28 |
+| SEC-05 scratch check (`throw new Error('Invalid API key re_CANARY')` temporarily injected, then reverted) | main: the message returned raw in a 500 body; fixed: `INTERNAL_ERROR`, log `inquiry.unexpected_error` |
+| SEC-05 regression `node --test --test-name-pattern="unexpected handler exception" tests/action.test.mjs`, main `src/actions/index.ts` | Expected FAIL — body message `Invalid API key re_FIXTURE_CANARY` instead of `INTERNAL_ERROR` |
+| Same, fixed `src/actions/index.ts` | PASS |
+| `node --test tests/action.test.mjs` after `npm run build:test`, fixed sources | PASS — 26 tests |
+
+The SEC-05 regression goes through the registered Action in workerd: for requests carrying `x-test-platform-fault`, the test-only transport wrapper makes `crypto.getRandomValues` throw a plain `Error` (used by the honeypot reference ID), then restores it. It asserts status 500, message `INTERNAL_ERROR`, no marker in the body or Worker logs, and that `TURNSTILE_REQUIRED` keeps its code and message. The wrapper is not emitted in application artifacts. `npm run verify` was not re-run after adding this test. None of these checks prove live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.
