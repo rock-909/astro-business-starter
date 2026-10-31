@@ -61,8 +61,8 @@ npm run test:browser
 
 - **改名换品牌**：改 `src/site-data.json`、`public/` 下的品牌文件、`wrangler.jsonc` 的 `name`，以及每种语言 `messages.json` 里的模板措辞（包括首页标题 `home.metadata.title`，它就是首页的 `<title>`；留空时用 `seo.defaultTitle`）。`npm run readiness` 会列出剩下的模板措辞。
 - **加一个页面**：
-  1. 在 `src/site-routes.ts` 的 `pages` 里加一行，例如 `{ key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true }`。`kind: 'content'` 是普通页面（没有目录和“最后更新”），法律文本用 `kind: 'legal'`；`nav: 'main'` 出现在页头和页脚第一栏，`nav: 'support'` 只在页脚第二栏，不写 `nav` 就不进导航。
-  2. 每种语言写一份 `src/content/<语言>/<key>.ts`，结构与 `contact.ts` 相同（`metadata.title`、`updatedAt`、`seo`、`content`）。少写一份时构建会报出缺的文件名。
+  1. 在 `src/site-routes.ts` 的 `pages` 里加一行，例如 `{ key: 'about', path: '/about', kind: 'content', nav: 'main', sitemap: true }`。`kind: 'content'` 是普通页面，法律文本用 `kind: 'legal'`，两者有二级标题（h2）时在宽屏右侧显示目录；`nav: 'main'` 出现在页头和页脚第一栏，`nav: 'support'` 只在页脚第二栏，不写 `nav` 就不进导航。
+  2. 每种语言写一份 `src/content/<语言>/<key>.ts`，结构与 `contact.ts` 相同（`metadata.title`、`updatedAt`、`seo`、`content`；可选 `metadata.description` 显示为标题下的一句说明，可选 `metadata.faq` 是 `{ question, answer }` 列表，显示在正文后并生成 FAQPage 结构化数据）。少写一份时构建会报出缺的文件名。
   3. 导航文字默认用页面标题。`npm test` 会打开每个页面里的每个站内链接，没登记的页面在这里报 404。
 - **去掉一种语言**（如西语）：删掉 `src/site-routes.ts` 里 `localeTable` 的 `es` 那一行，移走 `src/content/es/`，再从 `src/site-data.json` 的 `readiness.legalReviewed` 删掉 `es`（留着会被配置校验拒绝）。只剩一种语言时不显示语言切换，hreflang、og:locale 和 sitemap 只列剩下的语言，旧的 `/es/...` 网址返回 404。
 - **增加一种语言**：在 `localeTable` 加一行（`label` 切换文字、`name` 读屏名称、`ogLocale`），把 `src/content/en/` 复制成 `src/content/<代码>/` 并全部翻译，在 `legalReviewed` 加上这个语言。它的网址在 `/<代码>` 下。第一个语言是默认语言，不加前缀；文案类型以英文 `messages.json` 为准，如果去掉英语，要把 `src/site.ts` 里 `Messages` 的类型来源改成新的默认语言。
