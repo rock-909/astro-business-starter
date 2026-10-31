@@ -14,6 +14,15 @@ const pendingWidgetScript = `window.turnstile={render(el,options){window.__turns
 // Render the contact blocks with a long unbreakable address: the template ships without a
 // company email (launched sites must configure one), a derived site already has one.
 const longEmail = 'internationalsales@guangzhouhengtaimachinery.com';
+const htmlEntities: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#39;',
+  '"': '&quot;',
+};
+// Astro escapes text the same way before it reaches the HTML.
+const escapeHtml = (text: string) => text.replace(/[&<>'"]/g, (char) => htmlEntities[char]);
 async function withLongCompanyEmail(page: Page, site: Site) {
   await page.route(/\/contact$/, async (route) => {
     if (route.request().resourceType() !== 'document') return route.continue();
@@ -22,11 +31,14 @@ async function withLongCompanyEmail(page: Page, site: Site) {
     const methods = `<div class="contact-methods">${link}</div>`;
     let html = await response.text();
     const unconfigured = site.locales
-      .map((locale) => `<p>${site.messages(locale).contact.panel.unconfiguredMailbox}</p>`)
+      .map(
+        (locale) => `<p>${escapeHtml(site.messages(locale).contact.panel.unconfiguredMailbox)}</p>`,
+      )
       .find((paragraph) => html.includes(paragraph));
-    html = unconfigured
-      ? html.replace(unconfigured, methods)
-      : html.replace(/<div class="contact-methods">[\s\S]*?<\/div>/, methods);
+    const configured = /<div class="contact-methods">[\s\S]*?<\/div>/;
+    if (unconfigured) html = html.replace(unconfigured, methods);
+    else if (configured.test(html)) html = html.replace(configured, methods);
+    else html = html.replace('</aside>', `${methods}</aside>`);
     if (!/class="fallback"[^>]*>[^<]*<a href="mailto:/.test(html))
       html = html.replace('</form>', `</form><p class="fallback">${link}</p>`);
     await route.fulfill({ response, body: html });

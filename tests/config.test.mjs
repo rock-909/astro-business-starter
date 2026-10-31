@@ -6,6 +6,7 @@ import { createServer as createHttpServer } from 'node:http';
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -15,7 +16,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { assertValidSiteConfig } from '../src/site-schema.ts';
@@ -27,7 +28,7 @@ import {
   templateShareImages,
 } from '../scripts/readiness.mjs';
 import { startHarness } from './harness.mjs';
-import { derivedRoot } from './derived-site.mjs';
+import { derivedRoot, minimalPng } from './derived-site.mjs';
 import { loadSite } from './site-config.mjs';
 
 const identity = JSON.parse(
@@ -52,11 +53,15 @@ const writePage = (root, locale, page, text, comment = '') =>
       content: text,
     })};`,
   );
-// Works on whatever copy the checkout has, template or derived.
+// Works on whatever copy the checkout has, template or derived. Writes the launch
+// identity's own brand files too, so nothing rests on the checkout's public/ files.
 function writeLaunchCopy(root) {
-  // The identity's own share image and Worker name, whatever the checkout ships.
-  if (identity.brandAssets.ogImage.startsWith('/'))
-    writeFileSync(join(root, 'public', identity.brandAssets.ogImage), 'owner share image');
+  for (const path of Object.values(launchBrandAssets)) {
+    const file = join(root, 'public', path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, minimalPng);
+  }
+  // The site's own Worker name, whatever the checkout ships.
   const wrangler = join(root, 'wrangler.jsonc');
   writeFileSync(
     wrangler,
@@ -82,8 +87,11 @@ function launchFixture() {
   writeLaunchCopy(fixture);
   return fixture;
 }
+// A derived site may ship a raster favicon instead of the template SVG.
+const launchBrandAssets = { ogImage: '/brand/share.png', favicon: '/brand/icon.png' };
 const launchIdentity = {
   ...identity,
+  brandAssets: launchBrandAssets,
   name: 'Configured business',
   description: 'Owner confirmed business identity',
   seo: {
@@ -503,15 +511,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
         for (const [file, text] of Object.entries(scenario.files))
           writeFileSync(join(fixture, file), text);
         if (scenario.ready) {
-          // A derived site may ship a raster favicon instead of the template SVG.
-          cpSync(join(root, 'public/opengraph-image.png'), join(fixture, 'public/brand-icon.png'));
-          writeFileSync(
-            join(fixture, 'src/site-data.json'),
-            JSON.stringify({
-              ...launchIdentity,
-              brandAssets: { ...launchIdentity.brandAssets, favicon: '/brand-icon.png' },
-            }),
-          );
+          writeFileSync(join(fixture, 'src/site-data.json'), JSON.stringify(launchIdentity));
           writeLaunchCopy(fixture);
         }
         const env = {
@@ -550,7 +550,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
           assert.equal(result.status, 0, output);
           const html = readFileSync(join(fixture, 'dist/client/index.html'), 'utf8');
           if (scenario.ready) {
-            assert.match(html, /<link rel="icon" href="\/brand-icon.png">/);
+            assert.ok(html.includes(`<link rel="icon" href="${launchBrandAssets.favicon}">`));
             assert.doesNotMatch(html, /image\/svg\+xml/);
             assert.match(html, /index,follow,max-image-preview:large/);
             assert.match(html, /data-production="true"/);
@@ -636,7 +636,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
               await h.close();
             }
           } else {
-            assert.match(html, /<link rel="icon" href="\/icon.svg">/);
+            assert.ok(html.includes(`<link rel="icon" href="${identity.brandAssets.favicon}">`));
             assert.match(html, /noindex,nofollow/);
             assert.match(html, /data-production="false"/);
             assert.match(html, /https:\/\/shell\.supplier\.co\.uk/);

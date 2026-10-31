@@ -62,7 +62,7 @@ const header = Buffer.alloc(13);
 header.writeUInt32BE(1, 0);
 header.writeUInt32BE(1, 4);
 header.set([8, 2, 0, 0, 0], 8);
-const share = Buffer.concat([
+export const minimalPng = Buffer.concat([
   Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
   chunk('IHDR', header),
   chunk('IDAT', deflateSync(Buffer.from([0, 0x11, 0x22, 0x33]))),
@@ -141,7 +141,7 @@ export function writeDerivedSite(repo = '.') {
   for (const [path, bytes] of [
     [identity.brandAssets.logo.horizontal, logo],
     [identity.brandAssets.favicon, favicon],
-    [identity.brandAssets.ogImage, share],
+    [identity.brandAssets.ogImage, minimalPng],
   ]) {
     const file = join(root, 'public', path);
     mkdirSync(dirname(file), { recursive: true });
