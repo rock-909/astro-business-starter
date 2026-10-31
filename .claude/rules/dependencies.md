@@ -19,7 +19,7 @@ paths:
 
 | 例外 | 原因 | 移除条件 |
 | --- | --- | --- |
-| TypeScript 停在 6.x | TypeScript 7.0 无法运行 `astro check`（`@astrojs/check` 的 peer 只声明 `^5 \|\| ^6`）；不为此采用 beta | TypeScript 7.1 稳定版发布，类型检查改用 `@astrojs/ts-content-mapper`（`tsc --runExternalCode`），且上述验证通过；不等待 `@astrojs/check` 支持 TypeScript 7 |
+| TypeScript 停在 6.x | TypeScript 7.0 无法运行 `astro check`（`@astrojs/check` 的 peer 只声明 `^5 \|\| ^6`）；不为此采用 beta | Astro 自身的类型检查工具以稳定、非实验性的版本支持 TypeScript 7，且该组合通过 `npm ci`、`npm run format:check` 和 `npm run verify`；仅 TypeScript 7 发布稳定版不构成移除条件 |
 | Wrangler 依赖 Miniflare 的 `-beta` 版本线 | 这是 Cloudflare 随 Wrangler 发布的版本线，不是本项目选择的预发布版；测试用锁定 Wrangler 附带的 Miniflare（见 `PROVENANCE.md`） | Wrangler 改为依赖稳定版 Miniflare |
 
 理由：本地 `~/.npmrc` 的 `legacy-peer-deps=true` 曾让本地 `npm ci` 放过 TypeScript 7 的 peer 冲突，而 CI 会拒绝。
