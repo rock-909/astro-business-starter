@@ -9,6 +9,16 @@ const customize = document.querySelector<HTMLButtonElement>('[data-consent-custo
 const analytics = document.querySelector<HTMLInputElement>('[data-consent-analytics]')!;
 const advertising = document.querySelector<HTMLInputElement>('[data-consent-advertising]')!;
 const gaId = document.body.dataset.gaId || '';
+// Language suggestion pills (see syncLanguageSuggestion below).
+const suggestions = [...document.querySelectorAll<HTMLElement>('[data-language-suggestion]')];
+const suggestionArea = document.querySelector<HTMLElement>('[data-language-suggestions]');
+const pageLocale = document.body.dataset.locale!;
+// The page's hreflang alternates are the languages it really exists in (404 pages have none).
+const pageLocales = [
+  ...document.head.querySelectorAll<HTMLLinkElement>('link[rel="alternate"][hreflang]'),
+]
+  .map((link) => link.hreflang)
+  .filter((tag) => tag !== 'x-default');
 let gaInitialized = false;
 const globals = window as unknown as Record<string, unknown>;
 let gtag: ((...args: unknown[]) => void) | undefined;
@@ -83,6 +93,7 @@ function syncConsent() {
   banner.hidden = !!stored;
   analytics.checked = stored?.analytics || false;
   advertising.checked = stored?.advertising || false;
+  syncLanguageSuggestion();
 }
 function choose(consent: Consent) {
   try {
@@ -98,6 +109,7 @@ function choose(consent: Consent) {
   banner.hidden = true;
   if (hadFocus && opener?.isConnected) opener.focus();
   opener = null;
+  syncLanguageSuggestion();
 }
 function reopen(trigger?: HTMLElement) {
   if (trigger) opener = trigger;
@@ -117,6 +129,7 @@ function reopen(trigger?: HTMLElement) {
   choices.hidden = true;
   customize.setAttribute('aria-expanded', 'false');
   banner.hidden = false;
+  syncLanguageSuggestion();
   customize.focus();
 }
 document
@@ -138,7 +151,7 @@ customize.addEventListener('click', () => {
 });
 document.querySelectorAll<HTMLElement>('[data-open-consent]').forEach((button) => {
   // Hidden in the HTML so visitors without JavaScript are not offered a control that does nothing.
-  button.hidden = false;
+  button.closest<HTMLElement>('[data-open-consent-item]')!.hidden = false;
   button.addEventListener('click', () => reopen(button));
 });
 window.addEventListener('cookie-consent:open', () => reopen());
@@ -154,8 +167,9 @@ new ResizeObserver(() =>
   ),
 ).observe(banner);
 
-const themeSelect = document.querySelector<HTMLSelectElement>('[data-theme-select]')!;
-themeSelect.hidden = false;
+const themeSwitcher = document.querySelector<HTMLElement>('[data-theme-switcher]')!;
+const themeButtons = [...themeSwitcher.querySelectorAll<HTMLButtonElement>('[data-theme-choice]')];
+themeSwitcher.hidden = false;
 // Like the reference site, a first visit is light; visitors can still choose dark or the system.
 function applyTheme(theme: string) {
   // Swap every colour at once instead of letting links and buttons fade through their transition.
@@ -163,6 +177,8 @@ function applyTheme(theme: string) {
   root.classList.add('theme-switching');
   if (theme === 'system') delete root.dataset.theme;
   else root.dataset.theme = theme;
+  for (const button of themeButtons)
+    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
   void getComputedStyle(root).color;
   requestAnimationFrame(() => root.classList.remove('theme-switching'));
 }
@@ -174,22 +190,90 @@ function syncTheme() {
     /* Light is the default. */
   }
   if (!['light', 'dark', 'system'].includes(theme)) theme = 'light';
-  themeSelect.value = theme;
   applyTheme(theme);
 }
-themeSelect.addEventListener('change', () => {
-  const theme = themeSelect.value;
-  try {
-    localStorage.setItem('theme', theme);
-  } catch {
-    /* Preference still applies in this document. */
-  }
-  applyTheme(theme);
-});
+for (const button of themeButtons)
+  button.addEventListener('click', () => {
+    const theme = button.dataset.themeChoice!;
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      /* Preference still applies in this document. */
+    }
+    applyTheme(theme);
+  });
 window.addEventListener('storage', (event) => {
   if (event.key === null || event.key === 'theme') syncTheme();
 });
 syncTheme();
+
+// Language suggestion: when the browser prefers another registered language that this page
+// also exists in, a pill offers it. Never at the same time as the cookie card.
+function rememberLocale(locale: string) {
+  try {
+    localStorage.setItem('preferred-locale', locale);
+  } catch {
+    /* Without storage the choice is only not remembered. */
+  }
+}
+function matchLocale(tag: string) {
+  const browserTag = tag.toLowerCase();
+  // Exact (en), then a browser region of a site language (es-MX → es), then a bare browser
+  // language for a site region (pt → pt-BR). Regions are never swapped for one another.
+  return (
+    pageLocales.find((locale) => locale.toLowerCase() === browserTag) ??
+    pageLocales.find((locale) => browserTag.startsWith(`${locale.toLowerCase()}-`)) ??
+    pageLocales.find(
+      (locale) => !browserTag.includes('-') && locale.toLowerCase().split('-')[0] === browserTag,
+    )
+  );
+}
+function preferredLocale() {
+  try {
+    const remembered = localStorage.getItem('preferred-locale');
+    if (remembered && pageLocales.includes(remembered)) return remembered;
+  } catch {
+    /* Fall back to the browser languages. */
+  }
+  const { languages, language } = navigator;
+  for (const tag of languages?.length ? languages : [language]) {
+    const locale = matchLocale(tag);
+    if (locale) return locale;
+  }
+  return null;
+}
+function syncLanguageSuggestion() {
+  const preferred = banner.hidden ? preferredLocale() : null;
+  for (const suggestion of suggestions)
+    suggestion.hidden =
+      preferred === pageLocale || suggestion.dataset.languageSuggestion !== preferred;
+}
+for (const button of document.querySelectorAll('[data-language-dismiss]'))
+  button.addEventListener('click', () => {
+    rememberLocale(pageLocale);
+    syncLanguageSuggestion();
+  });
+// Choosing a language anywhere (header or pill) remembers it, so the pill does not offer the
+// language just left. Listening on the document runs after the links' own handlers, which
+// cancel the switch while an inquiry is pending.
+document.addEventListener('click', (event) => {
+  const link =
+    event.target instanceof Element
+      ? event.target.closest<HTMLAnchorElement>('[data-locale-link]')
+      : null;
+  if (link && !event.defaultPrevented) rememberLocale(link.dataset.localeLink!);
+});
+window.addEventListener('storage', (event) => {
+  if (event.key === null || event.key === 'preferred-locale') syncLanguageSuggestion();
+});
+if (suggestionArea)
+  // Footer space so the pill never covers the last controls when scrolled to the end.
+  new ResizeObserver(() =>
+    document.documentElement.style.setProperty(
+      '--language-suggestion-space',
+      `${suggestionArea.offsetHeight + 40}px`,
+    ),
+  ).observe(suggestionArea);
 
 for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-locale-link]')) {
   const updateTarget = () => {

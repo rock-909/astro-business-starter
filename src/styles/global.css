@@ -69,6 +69,9 @@
   /* Both themes dim with the same translucent black; deriving it from --neutral-12 turns it white in dark. */
   --overlay-scrim: oklch(0 0 0 / 0.5);
   --shadow: 0 10px 15px -3px oklch(0 0 0 / 0.1), 0 4px 6px -4px oklch(0 0 0 / 0.1);
+  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.05);
+  /* The language pill is translucent over a 12px blur, like the reference site. */
+  --suggestion-bg: color-mix(in oklab, var(--popover) 80%, transparent);
 
   /* Brand colour is for primary buttons only: step 11 with white text in light (step 9 misses 4.5:1). */
   --button-primary-bg: var(--brand-11);
@@ -219,6 +222,13 @@ html:has([data-cookie-banner]:not([hidden])) {
 }
 html:has([data-cookie-banner]:not([hidden])) body {
   padding-bottom: var(--cookie-banner-space, 0px);
+}
+/* The language pill reserves the same room while it is shown (never with the cookie card). */
+html:has([data-language-suggestion]:not([hidden])) {
+  scroll-padding-bottom: var(--language-suggestion-space, 0px);
+}
+html:has([data-language-suggestion]:not([hidden])) body {
+  padding-bottom: var(--language-suggestion-space, 0px);
 }
 /* Links carry no underline by default; components and .text-link add the cue they need. */
 a {
@@ -917,131 +927,216 @@ p {
   height: var(--button-height-sm);
   padding: 0 12px;
 }
+/* Footer, as on the reference site: brand and configured contacts, then Site / Legal / Social
+   columns; grey 14px links with a 28px target that darken on hover, never underlined. */
 .site-footer {
   border-top: 1px solid var(--border);
-  padding: 42px 0 28px;
+  background: var(--background);
+  padding: 40px 0 24px;
 }
 .footer-top {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  gap: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
 }
-.footer-description {
-  font-size: 13px;
-  max-width: 300px;
+.footer-brand {
+  min-width: 0;
+}
+.footer-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--foreground);
+}
+.footer-contact {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 4px;
+  margin-top: 12px;
+  font-style: normal;
+}
+.footer-contact .footer-link {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.footer-contact p {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--muted-foreground);
-  margin-top: 16px;
 }
-.footer-heading {
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  margin-bottom: 12px;
+.footer-contact p .icon {
+  margin-top: 2px;
+}
+.icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.footer-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px 64px;
 }
 .footer-links {
   display: flex;
   flex-direction: column;
   align-items: start;
-  gap: 8px;
-  font-size: 14px;
+  gap: 4px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
 }
-/* Footer links and the cookie-settings button: grey, foreground on hover, no underline. */
-.footer-links a,
-.text-button {
+.footer-link {
+  display: inline-block;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
   color: var(--muted-foreground);
 }
-.footer-links a:is(:hover, :active),
-.text-button:is(:hover, :active) {
+.footer-link:is(:hover, :active) {
   color: var(--foreground);
 }
 .footer-bottom {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  border-top: 1px solid var(--border);
-  margin-top: 32px;
-  padding-top: 20px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-.footer-tools {
-  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
 }
-.text-button {
-  padding: 10px 0;
-  background: none;
+.footer-bottom p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+@media (min-width: 640px) {
+  .footer-columns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 768px) {
+  .footer-top {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+/* Theme switcher: three 24px icon buttons in a rounded group; the chosen one is raised, the
+   others a step lighter than the footer links and foreground on hover. */
+.theme-switcher {
+  display: flex;
+  align-items: center;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.theme-switcher button {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--theme-switch-icon);
 }
-.theme-select {
-  width: auto;
-  min-height: 40px;
-  font-size: 12px;
-  padding: 8px 28px 8px 12px;
+.theme-switcher button:is(:hover, :focus-visible) {
+  color: var(--foreground);
 }
-.theme-select:is(:hover, :active) {
-  background: var(--muted);
+.theme-switcher button[aria-pressed='true'] {
+  background: var(--popover);
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 1px var(--border),
+    var(--shadow-xs);
 }
+/* Cookie card: full width on the bottom edge of a phone with a top border only; a floating
+   480px card from 640px (bottom right), at the bottom left from 1024px. */
 .cookie-banner {
   position: fixed;
   z-index: 40;
-  bottom: 20px;
-  left: 20px;
-  width: min(480px, calc(100% - 40px));
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
   background: var(--popover);
   color: var(--popover-foreground);
-  border: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   box-shadow: var(--shadow);
-  border-radius: var(--card-radius);
-  padding: 22px;
-  font-size: 13px;
   /* Short viewports (400% zoom, landscape phones) scroll inside the card instead of cutting it off. */
-  max-height: calc(100dvh - 40px);
+  max-height: 100dvh;
   overflow-y: auto;
-}
-.cookie-banner h2 {
-  font-size: 17px;
-  margin-bottom: 12px;
+  animation: overlay-enter 200ms ease;
 }
 .cookie-banner p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted-foreground);
-  margin-bottom: 16px;
 }
 .cookie-actions {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
 }
-.cookie-actions .button {
+/* Customize is last in the DOM (next to its options) but shown first. */
+.cookie-customize {
+  order: -1;
+}
+/* Reject and allow are equally easy: two equal columns at least as wide as the longer label. */
+.cookie-decisions {
+  display: grid;
   flex: 1;
-  white-space: nowrap;
-}
-.cookie-actions [aria-expanded='true'] {
-  background: var(--muted);
-  border-color: var(--foreground);
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 .cookie-choices {
-  padding-top: 14px;
-  margin-top: 14px;
-  border-top: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.cookie-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
 }
 .cookie-choices label {
   display: flex;
-  gap: 8px;
   align-items: center;
-  min-height: 40px;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
 }
 input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
   accent-color: var(--foreground);
 }
 /* Non-production notice: the reference site's warning tones, full width under the header. */
@@ -1447,6 +1542,111 @@ textarea[aria-invalid='true'] {
   overflow-wrap: anywhere;
 }
 /* 404: centred, a large grey code, a 24px title and the recovery buttons. */
+@media (max-width: 639.98px) {
+  /* On a phone Customize is a text link at the start of the row. */
+  .cookie-customize {
+    padding: 0;
+    border-color: transparent;
+    text-decoration: underline;
+    text-decoration-color: var(--link-underline);
+    text-underline-offset: 4px;
+  }
+  .cookie-customize:not(:disabled):is(:hover, :active),
+  .cookie-customize[aria-expanded='true'] {
+    background: transparent;
+    text-decoration-color: var(--foreground);
+  }
+}
+@media (min-width: 640px) {
+  .cookie-banner {
+    left: auto;
+    right: 20px;
+    bottom: 20px;
+    width: 480px;
+    max-height: calc(100dvh - 40px);
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+  }
+  .cookie-actions {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  .cookie-decisions {
+    flex: none;
+  }
+  .cookie-customize[aria-expanded='true'] {
+    background: var(--muted);
+  }
+}
+@media (min-width: 1024px) {
+  .cookie-banner {
+    right: auto;
+    left: 20px;
+  }
+}
+/* Language suggestion: a pill centred at the bottom, translucent over a blur. */
+.language-suggestions {
+  position: fixed;
+  z-index: 40;
+  right: 0;
+  bottom: 12px;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+  pointer-events: none;
+}
+.language-suggestion {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--suggestion-bg);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+  animation: overlay-enter 200ms ease;
+}
+.language-suggestion p {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+.language-suggestion .button {
+  border-radius: 9999px;
+}
+.language-suggestion .button.ghost {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--muted-foreground);
+}
+@media (min-width: 640px) {
+  .language-suggestions {
+    bottom: 20px;
+  }
+  .language-suggestion {
+    gap: 12px;
+    border-radius: 9999px;
+  }
+  .language-suggestion p {
+    font-size: 14px;
+  }
+}
+/* Overlays fade in and rise 0.5rem (the reduced-motion rule below shortens this to nothing). */
+@keyframes overlay-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
 .not-found {
   display: flex;
   flex-direction: column;
@@ -1486,33 +1686,6 @@ textarea[aria-invalid='true'] {
 @media (max-width: 760px) {
   .wrap {
     width: calc(100% - 40px);
-  }
-  .footer-top {
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-  }
-  .footer-brand {
-    grid-column: 1/-1;
-  }
-  .footer-bottom {
-    flex-direction: column;
-    align-items: start;
-    gap: 12px;
-  }
-  .cookie-banner {
-    padding: 18px;
-    bottom: 12px;
-    left: 12px;
-    width: calc(100% - 24px);
-    max-height: calc(100dvh - 24px);
-  }
-  .cookie-actions .button {
-    font-size: 12px;
-    padding: 0 10px;
-  }
-  .footer-tools {
-    width: 100%;
-    justify-content: space-between;
   }
 }
 @media (max-width: 420px) {

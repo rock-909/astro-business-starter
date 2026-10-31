@@ -27,6 +27,12 @@
     "rejectAll": "Reject all",
     "settings": "Cookie settings"
   },
+  "languageSuggestion": {
+    "label": "Language suggestion",
+    "message": "This page is available in English.",
+    "switchAction": "Switch to English",
+    "dismiss": "Close"
+  },
   "structured-data": {
     "website": {
       "description": "Inquiry site reference"
@@ -52,7 +58,8 @@
   "footer": {
     "columns": {
       "navigation": "Site",
-      "support": "Legal"
+      "support": "Legal",
+      "social": "Connect"
     },
     "sections": {
       "navigation": {
