@@ -39,7 +39,9 @@ export async function startHarness({
   nativeLimit = 1_000_000,
 } = {}) {
   const server = resolve(root, 'dist/server');
-  // The generated deploy config, so binding names and limits match what deploys.
+  // Mirror the deploy config the adapter generated (what `wrangler deploy` uploads),
+  // not a hand-copied one, so bindings, limits and asset options match; unset asset
+  // options keep Cloudflare's defaults.
   const deployed = JSON.parse(readFileSync(resolve(server, 'wrangler.json'), 'utf8'));
   const ratelimits = Object.fromEntries(
     deployed.ratelimits.map(({ name, namespace_id, simple }) => [
@@ -103,8 +105,8 @@ export async function startHarness({
             path: resolve(server, path),
           })),
       ],
-      compatibilityDate: '2026-10-19',
-      compatibilityFlags: ['nodejs_compat'],
+      compatibilityDate: deployed.compatibility_date,
+      compatibilityFlags: deployed.compatibility_flags,
       host: '127.0.0.1',
       port,
       cf: false,
@@ -117,8 +119,8 @@ export async function startHarness({
         binding: 'ASSETS',
         routerConfig: { has_user_worker: true },
         assetConfig: {
-          html_handling: 'drop-trailing-slash',
-          not_found_handling: 'none',
+          html_handling: deployed.assets?.html_handling ?? 'auto-trailing-slash',
+          not_found_handling: deployed.assets?.not_found_handling ?? 'none',
         },
       },
       outboundService: async (request) => {

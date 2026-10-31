@@ -67,6 +67,7 @@
     "title": "Sitio de consultas",
     "description": "Un punto de partida para un sitio web empresarial. Visita la página de contacto para preparar una consulta.",
     "contactLink": "Contacto",
+    "ruleLabel": "EN / ES",
     "eyebrow": "Un punto de partida empresarial"
   },
   "contact": {

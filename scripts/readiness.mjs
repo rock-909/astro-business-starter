@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
 import { loadEnv } from 'vite';
+import { unstable_readConfig } from 'wrangler';
 import { parseAllowedHosts } from '../src/lib/inquiry-hosts.ts';
 
 const publicHostname = (host) =>
@@ -35,9 +37,21 @@ const mailbox = (value) =>
   publicHostname(value.split('@')[1]);
 // Starter wording that must not reach an indexable derived site (EN and ES).
 const templateCopy =
-  /astro business starter|non-production|no destinado a producción|sentinel|reference (?:site|contact page)|site reference|(?:sitio|página)(?: de contacto)? de referencia|starting point|punto de partida|should replace|debe sustituir|must be replaced|not ready to receive|no está listo para recibir/i;
+  /astro business starter|non-production|inquiry site|sitio de consultas|\ben \/ es\b|no destinado a producción|sentinel|reference (?:site|contact page)|site reference|(?:sitio|página)(?: de contacto)? de referencia|starting point|punto de partida|should replace|debe sustituir|must be replaced|not ready to receive|no está listo para recibir/i;
 // Only rendered in states readiness already blocks: experiment builds and a blank mailbox.
 const templateOnlyKeys = /^(?:experiment\.|contact\.panel\.unconfiguredMailbox$)/;
+// SHA-256 of the starter share images (PNG and its SVG source), whose artwork reads
+// "Non-production reference site"; a derived site must ship its own.
+const templateShareImages = new Set([
+  'ce982e42c3a15c1ef92ce508adb91a070363bb5013ec42c3bc7b8c189bb51d8b',
+  'b496fcbf531621afff41352876c0feab803f41630455a5e8417b2447cb8c0012',
+]);
+const templateWorkerName = 'astro-business-starter';
+const wranglerConfig = (root) =>
+  unstable_readConfig(
+    { config: fileURLToPath(new URL('wrangler.jsonc', root)) },
+    { hideWarnings: true },
+  );
 const stringLeaves = (value, path = '') =>
   typeof value === 'string'
     ? [[path, value]]
@@ -49,10 +63,32 @@ const senderMailbox = (value) =>
   !/[\r\n]/.test(value) &&
   mailbox(value.match(/^[^<>]+<([^<>]+)>$/)?.[1]?.trim() || value);
 
+// The one env both launch gates check: wrangler.jsonc vars (what deploys as plain vars),
+// overridden by the mode's .env files, overridden by the shell. PUBLIC_* values come only
+// from the shell and .env files, like the values the build renders. .dev.vars is local
+// development input and never counts, although the adapter copies it into process.env.
+export function launchEnv(mode, shell = process.env, root = new URL('../', import.meta.url)) {
+  const vars = Object.entries(wranglerConfig(root).vars ?? {})
+    .filter(([key]) => !key.startsWith('PUBLIC_'))
+    .map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)]);
+  // Vite's loadEnv also reads process.env; give it the shell snapshot instead.
+  const current = process.env;
+  process.env = { ...shell };
+  try {
+    return { ...Object.fromEntries(vars), ...loadEnv(mode, fileURLToPath(root), '') };
+  } finally {
+    process.env = current;
+  }
+}
+
 export function readinessIssues(env = process.env, data, root = new URL('../', import.meta.url)) {
   const read = (path) => readFileSync(new URL(path, root), 'utf8');
   data ??= JSON.parse(read('src/site-data.json'));
   const issues = [];
+  if (wranglerConfig(root).name === templateWorkerName)
+    issues.push(
+      `wrangler.jsonc name must be this site's own Worker name, not ${templateWorkerName}`,
+    );
   const required = [
     'PUBLIC_SITE_URL',
     'PUBLIC_TURNSTILE_SITE_KEY',
@@ -150,6 +186,11 @@ export function readinessIssues(env = process.env, data, root = new URL('../', i
       !statSync(file, { throwIfNoEntry: false })?.isFile()
     )
       issues.push(`${path} ${value} does not exist under public/`);
+    else if (
+      path === 'brandAssets.ogImage' &&
+      templateShareImages.has(createHash('sha256').update(readFileSync(file)).digest('hex'))
+    )
+      issues.push(`${path} ${value} is still the template share image`);
   }
   if (data.company?.established > new Date().getFullYear())
     issues.push('company.established must not be later than the current year');
@@ -183,7 +224,7 @@ export function readinessIssues(env = process.env, data, root = new URL('../', i
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const issues = readinessIssues(loadEnv('production', process.cwd(), ''));
+  const issues = readinessIssues(launchEnv('production'));
   if (issues.length) {
     console.error('NOT LAUNCH READY\n' + issues.map((issue) => `- ${issue}`).join('\n'));
     process.exitCode = 1;
