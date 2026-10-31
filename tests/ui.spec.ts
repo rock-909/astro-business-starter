@@ -703,17 +703,24 @@ test('contact details hold a heading and the configured links only, and the form
   page,
   site,
 }) => {
-  await withLongCompanyEmail(page, site);
+  const { contact } = site.site;
+  const configured =
+    Boolean(contact.email || contact.phone || contact.whatsapp) ||
+    Object.values(site.site.company?.location ?? {}).some(Boolean);
   for (const locale of site.locales) {
     const t = site.messages(locale);
     await page.goto(contactPath(site, locale));
     const details = page.getByRole('region', { name: t.contact.panel.contactTitle, exact: true });
-    // No lead-in sentence: every paragraph-level child is the heading, a link or the address.
-    expect(
-      await details.evaluate((section) =>
-        [...section.children].every((child) => /^(H2|A|ADDRESS)$/.test(child.tagName)),
-      ),
-    ).toBe(true);
+    await expect(details).toHaveCount(configured ? 1 : 0);
+    // No lead-in sentence: the heading first, then only links and the address.
+    if (configured)
+      expect(
+        await details.evaluate(
+          (section) =>
+            section.children[0]?.tagName === 'H2' &&
+            [...section.children].slice(1).every((child) => /^(A|ADDRESS)$/.test(child.tagName)),
+        ),
+      ).toBe(true);
     const inquiry = page.getByRole('region', { name: t.inquiry.form.contactAriaLabel });
     await expect(inquiry.getByRole('heading')).toHaveCount(0);
     expect(
