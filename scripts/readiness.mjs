@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
 import { loadEnv } from 'vite';
@@ -154,8 +155,12 @@ export function readinessIssues(env = process.env, data, root = new URL('../', i
     ))
       if (!templateOnlyKeys.test(path) && templateCopy.test(value))
         issues.push(`${locale}/messages ${path} still contains template copy`);
-    if (templateCopy.test(read(`src/content/${locale}/contact.ts`)))
-      issues.push(`${locale}/contact still contains template copy`);
+    const contact = createRequire(import.meta.url)(
+      fileURLToPath(new URL(`src/content/${locale}/contact.ts`, root)),
+    ).default;
+    for (const [path, value] of stringLeaves(contact))
+      if (templateCopy.test(value))
+        issues.push(`${locale}/contact ${path} still contains template copy`);
     for (const page of ['privacy', 'terms']) {
       const text = read(`src/content/${locale}/${page}.ts`);
       if (

@@ -46,7 +46,7 @@
 ## 5. 搜索、分析与爬虫
 
 - **Google Search Console / Bing Webmaster Tools。** 在构建环境设置 `PUBLIC_GOOGLE_SITE_VERIFICATION` 和 `PUBLIC_BING_SITE_VERIFICATION`（只填 meta 的 content 值），重新构建部署，完成验证后提交 `https://<domain>/sitemap.xml`。
-- **GA4。** 设置 `PUBLIC_GA_MEASUREMENT_ID` 后，GA 只在生产构建且访客同意分析后加载。询盘成功时发送 `generate_lead` 事件，不含买家资料；在 GA4 里把 `generate_lead` 标为关键事件（key event）。
+- **GA4。** 设置 `PUBLIC_GA_MEASUREMENT_ID` 后，只在生产构建中、访客同意分析或广告任一类后，浏览器才从 `www.googletagmanager.com` 加载 gtag 脚本；只同意广告时脚本照样加载，但 GA 被停用，不发页面浏览或事件。页面浏览、`generate_lead` 与 `contact_click` 事件只在访客同意分析后发送。询盘成功时发送的 `generate_lead` 不含买家资料；在 GA4 里把 `generate_lead` 标为关键事件（key event）。
 - **Cloudflare AI 爬虫与 Bot 设置。** Cloudflare 的托管 robots.txt、AI 爬虫拦截和 Bot 防护可能在站点自己的规则前追加或拦截内容。上线后运行 `curl https://<domain>/robots.txt`，确认生产内容为 `Allow: /`（只禁止 `/api/` 和 `/_actions/`），且没有你不想要的对搜索或 AI 爬虫的拦截。
 
 ## 6. 日志
@@ -57,7 +57,9 @@
 
 ## 7. 回滚
 
-用 Cloudflare 的 Worker 版本回滚（面板的 Deployments，或 `npx wrangler rollback`）。回滚恢复代码和 `wrangler.jsonc` 里的 `vars`，但**不**回滚 secret、DNS、域名设置，也不恢复 Airtable、Upstash 或邮箱里的数据。改 secret 或供应商设置前先记录旧值所在位置。
+用 Cloudflare 的 Worker 版本回滚（面板的 Deployments，或 `npx wrangler rollback`）。每个 Worker 版本包含代码和绑定（[版本](https://developers.cloudflare.com/workers/versions-and-deployments/)），`wrangler secret put`/`delete` 本身也会创建并立即部署一个新版本（[secret](https://developers.cloudflare.com/workers/configuration/secrets/)）。因此回滚到轮换 secret 之前的版本，可能让 Worker 重新使用旧的 secret 值和旧的 `vars`。
+
+回滚不改变供应商侧的凭证状态：已在 Resend、Airtable、Turnstile 或 Upstash 撤销的密钥不会因回滚恢复有效，Worker 若拿回这把旧密钥，对应通道就会交付失败。回滚也不恢复 DNS、域名设置，或 Airtable、Upstash、邮箱里的数据。回滚后在面板或 `npx wrangler versions view <version-id>` 核对目标版本的绑定，确认每个 secret 都对应供应商处仍有效的凭证，必要时重新 `wrangler secret put`，再按第 8 节重新提交一条合成询盘。
 
 ## 8. 什么才算“已上线”
 
@@ -85,5 +87,6 @@
 | 表单草稿（姓名、邮箱、留言） | 填写表单时 | 浏览器 `sessionStorage` 的 `inquiry-draft`，不离开浏览器 | 当前标签页会话；确认成功后清除 |
 | 同意选择 | 访客做出选择 | 浏览器 `localStorage` 的 `cookie-consent` | 直到访客更改或清除 |
 | 主题偏好 | 访客切换主题 | 浏览器 `localStorage` 的 `theme` | 直到访客更改或清除 |
-| GA4 页面浏览与 `generate_lead`、`contact_click` 事件 | 仅在生产构建、已设置 `PUBLIC_GA_MEASUREMENT_ID` 且访客同意分析后 | Google Analytics；页面地址与来源去掉查询串和 hash，事件不含买家资料 | 按 GA 属性设置；撤回同意会停用 GA 并清除 GA cookie |
+| gtag 脚本请求 | 生产构建、已设置 `PUBLIC_GA_MEASUREMENT_ID`，且访客同意分析或广告任一类（包括只同意广告） | 浏览器向 Google（`www.googletagmanager.com`）请求脚本，Google 会收到常规请求信息（如 IP、User-Agent） | 按 Google 的政策 |
+| GA4 页面浏览与 `generate_lead`、`contact_click` 事件 | 仅在生产构建、已设置 `PUBLIC_GA_MEASUREMENT_ID` 且访客同意分析后；只同意广告时 GA 被停用，不发送 | Google Analytics；页面地址与来源去掉查询串和 hash，事件不含买家资料 | 按 GA 属性设置；撤回分析同意会停用 GA 并清除 GA cookie |
 | Worker 日志 | 每次询盘处理 | Cloudflare Workers Logs：参考号、结果类别、通道标记，不含表单字段或 IP | 3 天（Free）或 7 天（Paid） |

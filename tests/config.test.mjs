@@ -33,16 +33,21 @@ function writeLaunchCopy(root) {
     messages['structured-data'].website.description = launchCopy;
     messages.navigation.siteDescription = launchCopy;
     writeFileSync(file, JSON.stringify(messages));
+    // A leftover comment naming the starter is not page copy.
     writeFileSync(
       join(root, `src/content/${locale}/contact.ts`),
-      `export default ${JSON.stringify({
+      `import type { ContentPage } from '../../site';
+// Replaced reference site copy
+const contactPage = ${JSON.stringify({
         metadata: {
           title: 'Contact',
           updatedAt: '2026-10-25',
           seo: { title: 'Contact', description: launchCopy },
         },
         content: launchCopy,
-      })};`,
+      })} satisfies ContentPage;
+export default contactPage;
+`,
     );
     for (const page of ['privacy', 'terms'])
       writeFileSync(
@@ -178,8 +183,12 @@ test('readiness rejects shipped template copy and accepts owner-rewritten copy',
     'es/messages home.metadata.description still contains template copy',
     'es/messages structured-data.website.description still contains template copy',
     'es/messages navigation.siteDescription still contains template copy',
-    'en/contact still contains template copy',
-    'es/contact still contains template copy',
+    'en/contact metadata.seo.title still contains template copy',
+    'en/contact metadata.seo.description still contains template copy',
+    'en/contact content still contains template copy',
+    'es/contact metadata.seo.title still contains template copy',
+    'es/contact metadata.seo.description still contains template copy',
+    'es/contact content still contains template copy',
   ])
     assert.ok(shipped.includes(issue), issue);
   // Only rendered in states readiness already blocks, or not template copy at all.
