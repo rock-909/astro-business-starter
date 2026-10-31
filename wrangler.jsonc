@@ -7,4 +7,13 @@
   // fields) as the delivery record; request-level invocation logs and traces stay off.
   // Retention and cost: LAUNCH.md.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+  // Cheap per-location pre-check before the paid Upstash call; Upstash keeps the exact
+  // 10/minute count. namespace_id must be unique per Cloudflare account: LAUNCH.md.
+  "ratelimits": [
+    {
+      "name": "INQUIRY_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
 }

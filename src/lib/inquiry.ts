@@ -3,6 +3,7 @@
 import { env } from 'cloudflare:workers';
 import { ActionError } from 'astro:actions';
 import { ATTRIBUTION_FIELD_NAMES, isClickIdField, pickAttributionFields } from './attribution';
+import { parseAllowedHosts } from './inquiry-hosts';
 import { inquiryLeadSchema, type ValidatedInquiry } from './inquiry-schema';
 import { generateLeadReferenceId, splitName } from './lead-utils';
 import {
@@ -26,6 +27,8 @@ export interface InquiryEnv {
   UPSTASH_REDIS_REST_TOKEN?: string;
   RATE_LIMIT_PEPPER?: string;
   APP_ENV?: string;
+  /** Workers Rate Limiting binding declared in wrangler.jsonc. */
+  INQUIRY_RATE_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
 const settings = env as InquiryEnv;
@@ -34,6 +37,11 @@ const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 function fail(code: 'BAD_REQUEST' | 'SERVICE_UNAVAILABLE', message: string): never {
   throw new ActionError({ code, message });
+}
+/** Buyers see one code; the log category tells the owner which side to fix. */
+function turnstileUnavailable(reason: 'configuration' | 'provider'): never {
+  console.error('inquiry.turnstile_unavailable', { reason });
+  fail('SERVICE_UNAVAILABLE', 'TURNSTILE_UNAVAILABLE');
 }
 
 /** Keeps timeouts active through response-body parsing, not only until headers. */
@@ -70,6 +78,8 @@ function rateInput(ip: string): string {
 
 /** Same 10/minute atomic Upstash transaction and owner-approved outage policy. */
 async function rateLimit(ip: string): Promise<number | undefined> {
+  // Logged so a permanent misconfiguration is not mistaken for a transient outage.
+  let reason: 'configuration' | 'storage' = 'configuration';
   try {
     const pepper = string(settings.RATE_LIMIT_PEPPER);
     const url = new URL(string(settings.UPSTASH_REDIS_REST_URL));
@@ -84,6 +94,7 @@ async function rateLimit(ip: string): Promise<number | undefined> {
       url.hash
     )
       throw new Error('configuration');
+    reason = 'storage';
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
@@ -99,6 +110,15 @@ async function rateLimit(ip: string): Promise<number | undefined> {
       .join('')
       .slice(0, 16);
     const bucket = `ratelimit:inquiry:${string(settings.APP_ENV) || 'local'}:ip:${digest}`;
+    // Over the native limit: answer without spending an Upstash call. Its failure
+    // only skips the pre-check; Upstash still counts.
+    const limiter = settings.INQUIRY_RATE_LIMITER;
+    if (limiter)
+      try {
+        if (!(await limiter.limit({ key: bucket })).success) return 60;
+      } catch {
+        console.warn('inquiry.rate_limit_unavailable', { reason: 'precheck' });
+      }
     const result = await fetchJson(
       `${url.href.replace(/\/$/, '')}/multi-exec`,
       {
@@ -129,18 +149,14 @@ async function rateLimit(ip: string): Promise<number | undefined> {
     return count > 10 ? Math.max(1, Math.ceil(ttl / 1000)) : undefined;
   } catch {
     // Do not log provider errors: their text may echo request data or credentials.
-    console.warn('inquiry.rate_limit_unavailable');
+    console.warn('inquiry.rate_limit_unavailable', { reason });
     return undefined;
   }
 }
 
 function allowedHosts(): string[] {
   const configured = string(settings.TURNSTILE_ALLOWED_HOSTS);
-  if (configured)
-    return configured
-      .split(',')
-      .map((host) => host.trim().toLowerCase())
-      .filter((host) => /^[a-z0-9.-]+$/.test(host));
+  if (configured) return parseAllowedHosts(configured).hosts;
   try {
     return [new URL(string(settings.PUBLIC_SITE_URL)).hostname.toLowerCase()];
   } catch {
@@ -156,7 +172,7 @@ async function verifyTurnstile(token: unknown, ip: string): Promise<void> {
   const hosts = allowedHosts();
   // Official always-pass keys must never turn a configured production site into a bypass.
   if (!secret || /^[123]x0{20,}[A-Z]{2}$/.test(secret) || hosts.length === 0)
-    fail('SERVICE_UNAVAILABLE', 'TURNSTILE_UNAVAILABLE');
+    turnstileUnavailable('configuration');
   let result: { ok: boolean; body: unknown };
   try {
     result = await fetchJson('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
@@ -169,10 +185,10 @@ async function verifyTurnstile(token: unknown, ip: string): Promise<void> {
       }),
     });
   } catch {
-    fail('SERVICE_UNAVAILABLE', 'TURNSTILE_UNAVAILABLE');
+    turnstileUnavailable('provider');
   }
   if (!result.ok || !object(result.body) || typeof result.body.success !== 'boolean')
-    fail('SERVICE_UNAVAILABLE', 'TURNSTILE_UNAVAILABLE');
+    turnstileUnavailable('provider');
   const body = result.body;
   const errors = body['error-codes'];
   if (
@@ -181,15 +197,15 @@ async function verifyTurnstile(token: unknown, ip: string): Promise<void> {
     (errors !== undefined &&
       (!Array.isArray(errors) || errors.some((error) => typeof error !== 'string')))
   )
-    fail('SERVICE_UNAVAILABLE', 'TURNSTILE_UNAVAILABLE');
+    turnstileUnavailable('provider');
   if (!body.success) {
     if (
       Array.isArray(errors) &&
-      errors.some((code) =>
-        ['internal-error', 'invalid-input-secret', 'missing-input-secret'].includes(code),
-      )
+      errors.some((code) => ['invalid-input-secret', 'missing-input-secret'].includes(code))
     )
-      fail('SERVICE_UNAVAILABLE', 'TURNSTILE_UNAVAILABLE');
+      turnstileUnavailable('configuration');
+    if (Array.isArray(errors) && errors.includes('internal-error'))
+      turnstileUnavailable('provider');
     fail('BAD_REQUEST', 'TURNSTILE_REJECTED');
   }
   if (!hosts.includes(string(body.hostname).toLowerCase())) {

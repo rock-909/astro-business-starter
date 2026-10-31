@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
 import { loadEnv } from 'vite';
+import { parseAllowedHosts } from '../src/lib/inquiry-hosts.ts';
 
 const publicHostname = (host) =>
   !isIP(host) &&
@@ -87,7 +88,12 @@ export function readinessIssues(env = process.env, data, root = new URL('../', i
   if (!/^app[A-Za-z0-9]{10,}$/.test(env.AIRTABLE_BASE_ID || ''))
     issues.push('AIRTABLE_BASE_ID must be a valid Airtable app identifier');
   if (env.TURNSTILE_ALLOWED_HOSTS) {
-    const hosts = env.TURNSTILE_ALLOWED_HOSTS.split(',').map((host) => host.trim().toLowerCase());
+    // Same parser as the Worker, so a value that passes here is read the same way there.
+    const { hosts, invalid } = parseAllowedHosts(env.TURNSTILE_ALLOWED_HOSTS);
+    if (invalid || !hosts.length)
+      issues.push(
+        'TURNSTILE_ALLOWED_HOSTS must list hostnames (or https:// URLs) separated by commas',
+      );
     let siteHost = '';
     try {
       siteHost = new URL(env.PUBLIC_SITE_URL).hostname;
@@ -145,6 +151,8 @@ export function readinessIssues(env = process.env, data, root = new URL('../', i
     )
       issues.push(`${path} ${value} does not exist under public/`);
   }
+  if (data.company?.established > new Date().getFullYear())
+    issues.push('company.established must not be later than the current year');
   if (!data.contact?.email || sentinel.test(data.contact.email))
     issues.push('A real owner-confirmed public contact email is required');
   if (!data.readiness?.legalReviewed?.en || !data.readiness?.legalReviewed?.es)

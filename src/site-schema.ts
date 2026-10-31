@@ -62,7 +62,8 @@ const siteIdentitySchema = object({
   }),
   company: object({
     name: notWhitespaceOnly.optional(),
-    established: number().int().positive().max(new Date().getFullYear()).optional(),
+    // No current-year cap: workerd's module-scope clock reads 1970. Readiness checks it.
+    established: number().int().positive().optional(),
     location: object({
       address: notWhitespaceOnly.optional(),
       city: notWhitespaceOnly.optional(),

@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { assertValidSiteConfig } from '../src/site-schema.ts';
 import { readinessIssues } from '../scripts/readiness.mjs';
+import { startHarness } from './harness.mjs';
 
 const identity = JSON.parse(
   readFileSync(new URL('../src/site-data.json', import.meta.url), 'utf8'),
@@ -72,6 +73,7 @@ const launchIdentity = {
     defaultTitle: 'Configured business',
     defaultDescription: launchCopy,
   },
+  company: { established: 2004 },
   contact: { email: 'sales@supplier.co.uk' },
   readiness: { ownerConfirmedIdentity: true, legalReviewed: { en: true, es: true } },
 };
@@ -237,6 +239,17 @@ test('readiness rejects shipped template copy and accepts owner-rewritten copy',
   }
 });
 
+test('readiness rejects a founding year later than the current year', () => {
+  const year = new Date().getFullYear();
+  const issues = (established) =>
+    readinessIssues(productionPrerequisites, {
+      ...launchIdentity,
+      company: { established },
+    }).filter((issue) => issue.includes('company.established'));
+  assert.deepEqual(issues(year), []);
+  assert.equal(issues(year + 1).length, 1);
+});
+
 test('readiness rejects configured root-relative brand files missing from public/', () => {
   const issues = (brandAssets) =>
     readinessIssues({}, { ...identity, brandAssets }).filter((issue) =>
@@ -318,7 +331,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
       blocked: false,
     },
   ]) {
-    await suite.test(scenario.name, () => {
+    await suite.test(scenario.name, async () => {
       const fixture = mkdtempSync(join(tmpdir(), 'astro-config-'));
       try {
         for (const name of [
@@ -385,6 +398,18 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
             )) {
               assert.ok(!client.includes(value), `${key} must not appear in client assets`);
               assert.ok(!client.includes(key), `${key} must not appear in client assets`);
+            }
+            // On-demand routes import the site config in workerd, where module-scope time is 1970.
+            const h = await startHarness({ root: fixture });
+            try {
+              for (const path of ['/missing', '/es/missing'])
+                assert.equal(
+                  (await h.mf.dispatchFetch(`http://localhost${path}`)).status,
+                  404,
+                  path,
+                );
+            } finally {
+              await h.close();
             }
           } else {
             assert.match(html, /noindex,nofollow/);
