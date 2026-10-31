@@ -283,7 +283,7 @@ test('configured contact methods, logo and social links render; unconfigured one
     await expect(footerContact.locator('a[href^="https://wa.me/"]')).toHaveCount(
       contact.whatsapp ? 1 : 0,
     );
-    const address = [
+    const footerAddress = [
       company?.location?.address,
       company?.location?.city,
       company?.location?.country,
@@ -291,8 +291,8 @@ test('configured contact methods, logo and social links render; unconfigured one
       .map((part) => part?.trim())
       .filter(Boolean)
       .join(', ');
-    if (address) await expect(footerContact).toContainText(address);
-    if (!contact.email && !contact.phone && !contact.whatsapp && !address)
+    if (footerAddress) await expect(footerContact).toContainText(footerAddress);
+    if (!contact.email && !contact.phone && !contact.whatsapp && !footerAddress)
       await expect(footerContact).toHaveCount(0);
     // Every contact line carries its icon.
     else
@@ -1086,6 +1086,8 @@ test('the language pill offers the browser language once consent is settled, swi
   test.skip(!second, 'single-language site: nothing to suggest');
   const context = await browser.newContext({ baseURL, locale: first });
   const page = await context.newPage();
+  // A fresh context misses the shared hooks; the contact form must not load the real widget.
+  await mockWidget(page);
   await installColorProbe(page);
   const suggested = site.messages(first).languageSuggestion;
   const pill = page.getByRole('region', { name: suggested.label });
