@@ -103,6 +103,18 @@ const launchIdentity = {
   contact: { email: 'sales@supplier.co.uk' },
   readiness: { ownerConfirmedIdentity: true, legalReviewed: { en: true, es: true } },
 };
+const htmlEntities = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+// The favicon href a built page declares, with HTML attribute escaping undone.
+const faviconHref = (html) =>
+  html
+    .match(/<link rel="icon" href="([^"]*)"/)?.[1]
+    .replace(/&(?:#(\d+)|#x([\da-f]+)|(\w+));/gi, (entity, decimal, hex, name) =>
+      decimal
+        ? String.fromCodePoint(Number(decimal))
+        : hex
+          ? String.fromCodePoint(parseInt(hex, 16))
+          : (htmlEntities[name] ?? entity),
+    );
 // Inert syntax-only prerequisites; no request is made to these hosts/providers.
 const productionPrerequisites = {
   PUBLIC_APP_ENV: 'production',
@@ -550,7 +562,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
           assert.equal(result.status, 0, output);
           const html = readFileSync(join(fixture, 'dist/client/index.html'), 'utf8');
           if (scenario.ready) {
-            assert.ok(html.includes(`<link rel="icon" href="${launchBrandAssets.favicon}">`));
+            assert.equal(faviconHref(html), launchBrandAssets.favicon);
             assert.doesNotMatch(html, /image\/svg\+xml/);
             assert.match(html, /index,follow,max-image-preview:large/);
             assert.match(html, /data-production="true"/);
@@ -636,7 +648,7 @@ test('real Astro builds use dotenv, mode files and shell precedence for launch r
               await h.close();
             }
           } else {
-            assert.ok(html.includes(`<link rel="icon" href="${identity.brandAssets.favicon}">`));
+            assert.equal(faviconHref(html), identity.brandAssets.favicon);
             assert.match(html, /noindex,nofollow/);
             assert.match(html, /data-production="false"/);
             assert.match(html, /https:\/\/shell\.supplier\.co\.uk/);
