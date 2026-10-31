@@ -867,19 +867,24 @@ test('dark tokens match for the system preference and the explicit choice; main 
     (themes) => {
       const probe = document.createElement('span');
       document.body.append(probe);
-      const luminance = (color: string) => {
+      const luminance = (token: string, color: string) => {
         probe.style.color = color;
-        const channels = getComputedStyle(probe)
-          .color.match(/[\d.]+/g)!
-          .slice(0, 3)
-          .map((value) => {
-            const channel = Number(value) / 255;
-            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-          });
+        const resolved = getComputedStyle(probe).color;
+        const values = resolved.match(/[\d.]+/g)!;
+        if (Number(values[3] ?? 1) < 1)
+          throw new Error(
+            `${token} resolves to non-opaque ${resolved}; contrast needs opaque colours`,
+          );
+        const channels = values.slice(0, 3).map((value) => {
+          const channel = Number(value) / 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        });
         return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
       };
-      const ratio = (a: string, b: string) => {
-        const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      const ratio = (tokens: Record<string, string>, a: string, b: string) => {
+        const [light, dark] = [luminance(a, tokens[a]!), luminance(b, tokens[b]!)].sort(
+          (x, y) => y - x,
+        );
         return (light! + 0.05) / (dark! + 0.05);
       };
       const pairs = [
@@ -890,7 +895,7 @@ test('dark tokens match for the system preference and the explicit choice; main 
       const result = Object.entries(themes).flatMap(([name, tokens]) =>
         pairs.map(([text, background]) => ({
           pair: `${name} ${text} on ${background}`,
-          ratio: ratio(tokens[text!]!, tokens[background!]!),
+          ratio: ratio(tokens, text!, background!),
         })),
       );
       probe.remove();
