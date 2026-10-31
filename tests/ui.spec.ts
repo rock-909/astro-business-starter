@@ -1246,6 +1246,31 @@ test('configured submenus open as a full-width panel with keyboard support and c
     await page.keyboard.press('Home');
     await expect(links.first()).toBeFocused();
   }
+  // With focus kept in the open panel, hovering another top-level item, the current page
+  // included, highlights only that item.
+  const color = (target: ReturnType<Page['locator']>) =>
+    target.evaluate((element) => window.rgba(getComputedStyle(element).color).join());
+  const foreground = await tokenColor(page, '--foreground');
+  const muted = await tokenColor(page, '--muted-foreground');
+  const topItems = await nav.locator(':scope > ul > li > :is(a, button)').all();
+  for (const hovered of await nav.locator(':scope > ul > li > a').all()) {
+    await hovered.hover();
+    await settled(page);
+    const name = (await hovered.textContent())!.trim();
+    for (const item of topItems) {
+      const same = await item.evaluate(
+        (element, other) => element === other,
+        await hovered.elementHandle(),
+      );
+      expect(
+        await color(item),
+        `${(await item.textContent())!.trim()} while ${name} is hovered`,
+      ).toBe(same ? foreground : muted);
+    }
+    await expect(panel).toBeVisible();
+    await expect(links.first()).toBeFocused();
+  }
+  await page.mouse.move(5, 700);
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();
   await expect(trigger).toBeFocused();

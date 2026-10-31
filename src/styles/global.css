@@ -444,11 +444,12 @@ html {
   font-weight: 500;
   white-space: nowrap;
 }
-.header-nav-item:is(:hover, [aria-current='page'], [aria-expanded='true']) {
+.header-nav-item:is([aria-current='page'], [aria-expanded='true']),
+[data-header-nav] > li:hover > .header-nav-item {
   color: var(--foreground);
 }
-.header-nav ul:has(:is(a, button):hover) .header-nav-item[aria-current='page']:not(:hover),
-.header-nav ul:has([aria-expanded='true']) .header-nav-item[aria-current='page'] {
+[data-header-nav]:has(> li:hover) > li:not(:hover) > .header-nav-item,
+[data-header-nav]:has([aria-expanded='true']) > li:not(:hover) > [aria-current='page'] {
   color: var(--muted-foreground);
 }
 .site-header svg {
