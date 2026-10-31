@@ -463,8 +463,8 @@ p {
   gap: 6px;
   align-items: center;
   justify-content: center;
-  min-height: var(--button-height-default);
-  padding: 10px 20px;
+  height: var(--button-height-default);
+  padding: 0 20px;
   background: var(--button-primary-bg);
   color: var(--button-primary-fg);
   border: 0;
@@ -500,8 +500,8 @@ p {
   pointer-events: none;
 }
 .button.small {
-  min-height: var(--button-height-sm);
-  padding: 6px 12px;
+  height: var(--button-height-sm);
+  padding: 0 12px;
 }
 .hero-rule {
   display: flex;
@@ -902,7 +902,7 @@ input[type='checkbox'] {
   }
   .cookie-actions .button {
     font-size: 12px;
-    padding: 8px 10px;
+    padding: 0 10px;
   }
   .footer-tools {
     width: 100%;
