@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const widgetScript = `window.turnstile={render(el,options){window.__turnstileOptions=options;const button=document.createElement('button');button.type='button';button.textContent='[Test] Complete verification';button.onclick=()=>options.callback('fixture-token');el.append(button);options.callback('fixture-token');return 'fixture-widget';},reset(){}};`;
+const widgetScript = `window.turnstile={render(el,options){window.__turnstileOptions=options;el.style.display='block';el.style.width=options.size==='compact'?'150px':'300px';const button=document.createElement('button');button.type='button';button.textContent='[Test] Complete verification';button.onclick=()=>options.callback('fixture-token');el.append(button);options.callback('fixture-token');return 'fixture-widget';},reset(){}};`;
 async function mockWidget(page: Page) {
   await page.route(
     'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit',
@@ -231,6 +231,16 @@ test('no-JS content, legal links, and secure fallback remain readable', async ({
 });
 
 test('mobile layout is keyboard usable and has no horizontal overflow', async ({ page }) => {
+  // 320px is the WCAG 1.4.10 reflow width; the fixture widget is as wide as real Turnstile.
+  for (const path of ['/contact', '/es/contact']) {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto(path);
+    await dismissConsent(page);
+    await expect(page.getByRole('button', { name: '[Test] Complete verification' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/contact');
   await dismissConsent(page);
@@ -245,6 +255,50 @@ test('mobile layout is keyboard usable and has no horizontal overflow', async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });
+});
+
+test('on a phone, every Tab stop up to the footer stays clear of the open cookie card', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [path, title] of [
+    ['/contact', 'Cookie preferences'],
+    ['/es/contact', 'Preferencias de cookies'],
+    ['/privacy', 'Cookie preferences'],
+  ] as const) {
+    await page.goto(path);
+    const banner = page.getByRole('region', { name: title });
+    await expect(banner).toBeVisible();
+    const stops: string[] = [];
+    let reachedFooterEnd = false;
+    for (let step = 0; step < 80; step++) {
+      await page.keyboard.press('Tab');
+      // SC 2.4.11 Minimum: no control may be entirely hidden. Single-line controls must be fully
+      // clear; the tall message box only scrolls far enough to show part of itself.
+      const stop = await page.evaluate(() => {
+        const card = document.querySelector('[data-cookie-banner]')!.getBoundingClientRect();
+        const focused = document.activeElement as HTMLElement | null;
+        if (!focused || focused === document.body) return null;
+        if (focused.closest('[data-cookie-banner]')) return { inCard: true } as const;
+        const rect = focused.getBoundingClientRect();
+        const covered = Math.max(
+          0,
+          Math.min(rect.bottom, card.bottom) - Math.max(rect.top, card.top),
+        );
+        return {
+          inCard: false,
+          name: `${focused.tagName} ${focused.getAttribute('aria-label') || focused.getAttribute('name') || focused.textContent?.trim()}`,
+          clear: focused.tagName === 'TEXTAREA' ? covered < rect.height : covered === 0,
+        } as const;
+      });
+      if (!stop) continue;
+      if (stop.inCard) break;
+      reachedFooterEnd = stop.name.startsWith('SELECT');
+      if (!stop.clear) stops.push(stop.name);
+    }
+    expect(reachedFooterEnd, `${path} Tab reached the footer theme select`).toBe(true);
+    expect(stops, `${path} focus stops hidden by the cookie card`).toEqual([]);
+  }
 });
 
 test('keyboard and assistive tech never reach the honeypot field', async ({ page }) => {

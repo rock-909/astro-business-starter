@@ -133,6 +133,13 @@ window.addEventListener('storage', (event) => {
   if (event.key === null || event.key === 'cookie-consent') syncConsent();
 });
 syncConsent();
+// Publish the card's footprint so CSS can keep focused controls scrolled above it.
+new ResizeObserver(() =>
+  document.documentElement.style.setProperty(
+    '--cookie-banner-space',
+    `${banner.offsetHeight + 24}px`,
+  ),
+).observe(banner);
 
 const themeSelect = document.querySelector<HTMLSelectElement>('[data-theme-select]')!;
 function syncTheme() {
