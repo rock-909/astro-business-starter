@@ -870,6 +870,10 @@ test('dark tokens match for the system preference and the explicit choice; main 
       const luminance = (token: string, color: string) => {
         probe.style.color = color;
         const resolved = getComputedStyle(probe).color;
+        if (!/^rgba?\(/.test(resolved))
+          throw new Error(
+            `${token} resolves to ${resolved}; contrast needs an rgb()/rgba() colour`,
+          );
         const values = resolved.match(/[\d.]+/g)!;
         if (Number(values[3] ?? 1) < 1)
           throw new Error(
