@@ -1294,13 +1294,13 @@ test('the language menu opens on hover or click, checks the current language and
   const menu = page.locator('[data-language-menu]');
   const list = menu.getByRole('list', { name: site.messages(locale).navigation.language });
   await expect(list).toBeHidden();
-  // Hover opens it at once with a fade and scale; leaving closes it.
+  // Hover opens it at once with a fade only, no growing or rising; leaving closes it.
   await trigger.hover();
   await expect(list).toBeVisible();
   const opening = await list.evaluate((panel) =>
     panel.getAnimations().map((animation) => (animation as CSSTransition).transitionProperty),
   );
-  expect(opening).toEqual(expect.arrayContaining(['opacity', 'transform']));
+  expect(opening).toEqual(['opacity']);
   // The current language is marked and checked but is not a link; the others are links.
   const currentOption = list.locator('[aria-current="true"]');
   await expect(currentOption).toHaveText(name(locale));
@@ -1375,7 +1375,7 @@ test('the phone menu is a right-side drawer with navigation, the inquiry button 
       .poll(() => drawer.evaluate((dialog) => dialog.getBoundingClientRect().x))
       .toBe(width! - drawerWidth!);
     expect((await drawer.boundingBox())!.width).toBe(drawerWidth);
-    // It slides in over 500ms and focus starts on the close button.
+    // It slides in and focus starts on the close button.
     const close = drawer.getByRole('button', { name: t.accessibility.closeMenu, exact: true });
     await expect(close).toBeFocused();
     const menu = drawer.getByRole('navigation', { name: t.accessibility.mobileNavigation });
@@ -1409,7 +1409,6 @@ test('the phone menu is a right-side drawer with navigation, the inquiry button 
     await open.click();
     await expect(drawer).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(drawer).toHaveAttribute('data-closing', '');
     await expect(drawer).toBeHidden();
     await open.click();
     await expect(close).toBeFocused();
@@ -1432,6 +1431,161 @@ test('the phone menu is a right-side drawer with navigation, the inquiry button 
     await languageLink(page, site, second).click();
     await expect(page).toHaveURL(site.pathFor(second, 'home'));
   }
+});
+
+// Every transition the phone drawer and its backdrop start, as they start.
+type DrawerTransition = { property: string; pseudo: string; duration: number; easing: string };
+const recordDrawerTransitions = (page: Page) =>
+  page.locator('[data-mobile-drawer]').evaluate((element) => {
+    const started: DrawerTransition[] = [];
+    (window as unknown as { drawerTransitions: DrawerTransition[] }).drawerTransitions = started;
+    element.addEventListener('transitionrun', (event) => {
+      if (event.target !== element) return;
+      const transition = document
+        .getAnimations()
+        .find(
+          (animation) =>
+            (animation as CSSTransition).transitionProperty === event.propertyName &&
+            (animation.effect as KeyframeEffect).pseudoElement === (event.pseudoElement || null),
+        );
+      const timing = transition?.effect?.getComputedTiming();
+      started.push({
+        property: event.propertyName,
+        pseudo: event.pseudoElement,
+        duration: Number(timing?.duration),
+        easing: String(timing?.easing),
+      });
+    });
+  });
+const drawerTransitions = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as { drawerTransitions: DrawerTransition[] }).drawerTransitions.splice(0),
+  );
+const slides = (transitions: DrawerTransition[]) =>
+  transitions
+    .filter((transition) => transition.property === 'translate')
+    .map(({ duration, easing }) => ({ duration, easing }));
+
+test('the phone drawer slides in over 250ms and out over 200ms, turns back mid-slide and moves at once from the keyboard', async ({
+  page,
+  site,
+}) => {
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(site.pathFor(locale, 'home'));
+  await dismissConsent(page, site);
+  const open = page
+    .getByRole('banner')
+    .getByRole('button', { name: t.accessibility.openMenu, exact: true });
+  const drawer = page.getByRole('dialog', { name: t.accessibility.mobileNavigation });
+  const close = drawer.getByRole('button', { name: t.accessibility.closeMenu, exact: true });
+  const openX = 390 - 320;
+  const curve = 'cubic-bezier(0.32, 0.72, 0, 1)';
+  await recordDrawerTransitions(page);
+
+  // A tap slides it in over 250ms and the close button slides it out over 200ms.
+  await open.click();
+  await expect(close).toBeFocused();
+  await close.click();
+  await expect(drawer).toBeHidden();
+  expect(slides(await drawerTransitions(page))).toEqual([
+    { duration: 250, easing: curve },
+    { duration: 200, easing: curve },
+  ]);
+
+  // A tap on close while it is still sliding in turns it back from where it is: it never
+  // jumps fully open first.
+  await page.evaluate(() => {
+    const element = document.querySelector<HTMLDialogElement>('[data-mobile-drawer]')!;
+    const closer = element.querySelector<HTMLButtonElement>('[data-mobile-close]')!;
+    const track: number[] = [];
+    (window as unknown as { track: number[] }).track = track;
+    const frame = () => {
+      const x = element.getBoundingClientRect().x;
+      if (element.open && !track.length && x < innerWidth - 40) {
+        track.push(x);
+        closer.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      } else if (track.length) track.push(x);
+      if (element.open || !track.length) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+  await open.click();
+  await expect(drawer).toBeHidden();
+  const track = await page.evaluate(() => (window as unknown as { track: number[] }).track);
+  expect(track[0], 'the close lands mid-slide').toBeGreaterThan(openX);
+  for (let index = 1; index < track.length; index++)
+    expect(track[index], `frame ${index}`).toBeGreaterThanOrEqual(track[index - 1]!);
+  await drawerTransitions(page);
+
+  // Enter on the menu button opens it already in place; Escape closes it at once.
+  await open.focus();
+  await page.keyboard.press('Enter');
+  await expect(close).toBeFocused();
+  expect(await drawer.evaluate((dialog) => dialog.getBoundingClientRect().x)).toBe(openX);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+  await expect(open).toBeFocused();
+  expect(await drawerTransitions(page)).toEqual([]);
+  // A tap still slides it out after a keyboard open.
+  await page.keyboard.press('Enter');
+  await expect(close).toBeFocused();
+  await close.click();
+  await expect(drawer).toBeHidden();
+  expect(slides(await drawerTransitions(page))).toEqual([{ duration: 200, easing: curve }]);
+});
+
+test('with reduced motion the drawer and overlays stop moving but keep short fades', async ({
+  page,
+  site,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const locale = homeLocale(site);
+  const t = site.messages(locale);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(site.pathFor(locale, 'home'));
+  // The cookie card fades in over 200ms without rising.
+  const entrance = await page.locator('[data-cookie-banner]').evaluate((card) => {
+    card.style.animation = 'none';
+    void card.offsetWidth;
+    card.style.animation = '';
+    const timing = ['offset', 'computedOffset', 'easing', 'composite'];
+    return card.getAnimations().map((animation) => ({
+      duration: animation.effect!.getComputedTiming().duration,
+      properties: [
+        ...new Set(
+          (animation.effect as KeyframeEffect)
+            .getKeyframes()
+            .flatMap((frame) => Object.keys(frame).filter((key) => !timing.includes(key))),
+        ),
+      ],
+    }));
+  });
+  expect(entrance).toEqual([{ duration: 200, properties: ['opacity'] }]);
+  await dismissConsent(page, site);
+  // The drawer appears in place and goes at once; only its backdrop fades, within 200ms.
+  const open = page
+    .getByRole('banner')
+    .getByRole('button', { name: t.accessibility.openMenu, exact: true });
+  const drawer = page.getByRole('dialog', { name: t.accessibility.mobileNavigation });
+  await recordDrawerTransitions(page);
+  await open.click();
+  await expect(drawer).toBeVisible();
+  expect(await drawer.evaluate((dialog) => dialog.getBoundingClientRect().x)).toBe(390 - 320);
+  await settled(page);
+  await drawer.getByRole('button', { name: t.accessibility.closeMenu, exact: true }).click();
+  await expect(drawer).toBeHidden();
+  const started = await drawerTransitions(page);
+  expect(slides(started)).toEqual([]);
+  expect(
+    started
+      .filter((transition) => transition.property === 'opacity')
+      .map(({ pseudo, duration }) => ({ pseudo, duration })),
+  ).toEqual([
+    { pseudo: '::backdrop', duration: 200 },
+    { pseudo: '::backdrop', duration: 200 },
+  ]);
 });
 
 test('configured submenus open as a full-width panel with keyboard support and collapse in the phone drawer', async ({
