@@ -213,8 +213,16 @@
 * {
   box-sizing: border-box;
 }
+/* As on the reference site, the page is at least one window tall and main takes the spare
+   room, so a short page keeps its footer at the bottom of the window. */
 body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
   margin: 0;
+}
+main {
+  flex: 1 0 auto;
 }
 /* Keep keyboard focus and the last footer controls above the open cookie card (WCAG 2.4.11). */
 html:has([data-cookie-banner]:not([hidden])) {
@@ -932,7 +940,12 @@ p {
 .site-footer {
   border-top: 1px solid var(--border);
   background: var(--background);
-  padding: 40px 0 24px;
+}
+/* The same 1080px box and 24px side padding as the header. */
+.footer-inner {
+  max-width: 1080px;
+  margin-inline: auto;
+  padding: 40px 24px 24px;
 }
 .footer-top {
   display: flex;

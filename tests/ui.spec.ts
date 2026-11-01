@@ -817,6 +817,37 @@ test('footer links are grey without an underline and darken on hover; in-content
   expect(await look(inContent)).toMatchObject({ underline: 'underline', decoration: foreground });
 });
 
+test('on a page shorter than the window the footer sits at its bottom, aligned with the header', async ({
+  page,
+  site,
+}) => {
+  const home = site.pathFor(homeLocale(site), 'home');
+  // A window taller than the page, so there is spare room the footer must not leave below it.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 2000 });
+    for (const path of [home, `${home === '/' ? '' : home}/missing-offering`]) {
+      await page.goto(path);
+      await dismissConsent(page, site);
+      const box = await page.evaluate(() => {
+        const footer = document.querySelector('footer')!;
+        const footerInner = footer.firstElementChild!.getBoundingClientRect();
+        const headerInner = document
+          .querySelector('header')!
+          .firstElementChild!.getBoundingClientRect();
+        return {
+          footerBottom: footer.getBoundingClientRect().bottom + scrollY,
+          pageHeight: document.documentElement.scrollHeight,
+          footer: [footerInner.left, footerInner.width],
+          header: [headerInner.left, headerInner.width],
+        };
+      });
+      expect(box.footerBottom, `${path} at ${width}px`).toBe(2000);
+      expect(box.pageHeight, `${path} at ${width}px`).toBe(2000);
+      expect(box.footer, `${path} at ${width}px`).toEqual(box.header);
+    }
+  }
+});
+
 test('contact details hold a heading and the configured links only, and the form has no card or title', async ({
   page,
   site,
