@@ -92,6 +92,8 @@ function syncConsent() {
   const stored = loadConsent();
   applyConsent(stored || { ...denied });
   banner.hidden = !!stored;
+  // pre-paint.js showed the card from storage alone; from here the hidden attribute decides.
+  delete document.documentElement.dataset.consentPending;
   analytics.checked = stored?.analytics || false;
   advertising.checked = stored?.advertising || false;
   syncLanguageSuggestion();

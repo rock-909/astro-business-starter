@@ -848,6 +848,72 @@ test('on a page shorter than the window the footer sits at its bottom, aligned w
   }
 });
 
+test('the footer does not move while the home page loads, on a first visit and a return visit', async ({
+  page,
+  site,
+}) => {
+  const home = site.pathFor(homeLocale(site), 'home');
+  const t = site.messages(homeLocale(site));
+  for (const [width, height] of [
+    [390, 844],
+    [1350, 940],
+  ]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    for (const visit of ['first', 'return']) {
+      await page.goto(home);
+      await page.evaluate(() => localStorage.clear());
+      if (visit === 'return') await dismissConsent(page, site);
+      await page.reload();
+      // site-browser.ts has run once the theme switcher shows the current choice.
+      await expect(
+        page
+          .getByRole('group', { name: t.accessibility.themeSelector })
+          .getByRole('button', { pressed: true }),
+      ).toHaveCount(1);
+      const result = await page.evaluate(
+        () =>
+          new Promise<{ shifts: string[]; footerEnd: number; pageEnd: number; card: number }>(
+            (resolve) => {
+              const shifts: string[] = [];
+              // Layout shifts are only reported to observers; buffered includes the load.
+              new PerformanceObserver((list) => {
+                for (const entry of list.getEntries() as (PerformanceEntry & {
+                  value: number;
+                  sources: { node?: Node | null }[];
+                })[])
+                  shifts.push(
+                    `${entry.value.toFixed(4)} ${entry.sources.map((source) => (source.node as Element | null)?.tagName).join(',')}`,
+                  );
+              }).observe({ type: 'layout-shift', buffered: true });
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => {
+                  const card = document.querySelector<HTMLElement>('[data-cookie-banner]')!;
+                  resolve({
+                    shifts,
+                    footerEnd:
+                      document.querySelector('footer')!.getBoundingClientRect().bottom + scrollY,
+                    pageEnd: document.body.getBoundingClientRect().bottom + scrollY,
+                    // The box height; the entry animation only translates it.
+                    card: card.hidden ? 0 : card.getBoundingClientRect().height,
+                  });
+                }),
+              );
+            },
+          ),
+      );
+      const where = `${visit} visit at ${width}px`;
+      expect(result.shifts, where).toEqual([]);
+      // Where it always rested: the page ends with the footer, or with the open cookie card
+      // and 24px of room above it so the card never hides the last footer row.
+      expect(result.card > 0, where).toBe(visit === 'first');
+      expect(result.footerEnd, where).toBeCloseTo(
+        result.pageEnd - (result.card ? result.card + 24 : 0),
+        0,
+      );
+    }
+  }
+});
+
 test('contact details hold a heading and the configured links only, and the form has no card or title', async ({
   page,
   site,

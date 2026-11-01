@@ -7,4 +7,9 @@
     if (theme === 'dark') root.dataset.theme = theme;
     else if (theme === 'system') delete root.dataset.theme;
   } catch {}
+  try {
+    if (!localStorage.getItem('cookie-consent')) root.dataset.consentPending = '';
+  } catch {
+    root.dataset.consentPending = '';
+  }
 }
