@@ -99,7 +99,7 @@
   --transition-colors: 150ms ease-out;
   /* Motion curves shared with the reference site: overlays arrive with a strong ease-out,
      the phone drawer starts fast and settles slowly. */
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   --font-sans:
@@ -1103,7 +1103,7 @@ p {
   /* Short viewports (400% zoom, landscape phones) scroll inside the card instead of cutting it off. */
   max-height: 100dvh;
   overflow-y: auto;
-  animation: overlay-enter 200ms var(--ease-out);
+  animation: overlay-enter 200ms var(--ease-out-strong);
 }
 .cookie-banner p {
   margin: 0;
@@ -1627,7 +1627,7 @@ textarea[aria-invalid='true'] {
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
   pointer-events: auto;
-  animation: overlay-enter 200ms var(--ease-out);
+  animation: overlay-enter 200ms var(--ease-out-strong);
 }
 .language-suggestion p {
   min-width: 0;
