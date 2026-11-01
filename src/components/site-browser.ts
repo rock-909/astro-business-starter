@@ -151,8 +151,6 @@ customize.addEventListener('click', () => {
   customize.setAttribute('aria-expanded', String(!choices.hidden));
 });
 document.querySelectorAll<HTMLElement>('[data-open-consent]').forEach((button) => {
-  // Hidden in the HTML so visitors without JavaScript are not offered a control that does nothing.
-  button.closest<HTMLElement>('[data-open-consent-item]')!.hidden = false;
   button.addEventListener('click', () => reopen(button));
 });
 window.addEventListener('cookie-consent:open', () => reopen());
@@ -170,7 +168,6 @@ new ResizeObserver(() =>
 
 const themeSwitcher = document.querySelector<HTMLElement>('[data-theme-switcher]')!;
 const themeButtons = [...themeSwitcher.querySelectorAll<HTMLButtonElement>('[data-theme-choice]')];
-themeSwitcher.hidden = false;
 // Like the reference site, a first visit is light; visitors can still choose dark or the system.
 function applyTheme(theme: string) {
   // Swap every colour at once instead of letting links and buttons fade through their transition.

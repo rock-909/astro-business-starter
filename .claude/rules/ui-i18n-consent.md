@@ -5,7 +5,6 @@ paths:
   - "src/pages/**/*.astro"
   - "src/styles/**/*.css"
   - "src/content/**/messages.json"
-  - "public/theme-init.js"
   - "tests/ui.spec.ts"
   - "src/lib/inquiry-limits.ts"
 ---

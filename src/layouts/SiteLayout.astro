@@ -16,6 +16,7 @@ import {
 } from '../site';
 import SiteHeader from '../components/SiteHeader.astro';
 import Icon from '../components/Icon.astro';
+import prePaint from '../components/pre-paint.js?raw';
 import '../styles/global.css';
 interface Props {
   locale: Locale;
@@ -118,7 +119,12 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
       </>
     )}
     <link rel="icon" href={site.brandAssets.favicon} />
-    <script is:inline src="/theme-init.js"></script>
+    {/* Inline so it runs before first paint without a render-blocking request. It applies the
+        stored theme and marks the page as scripted, so the script-only footer controls show
+        from the first paint instead of growing the footer later. The CSP allows this exact
+        text by its sha256 hash in public/_headers and src/security-headers.ts; tests fail if
+        the two drift apart. */}
+    <script is:inline set:html={prePaint} />
   </head>
   <body
     data-locale={locale}
@@ -202,8 +208,9 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
                     </a>
                   </li>
                 ))}
-                {/* Hidden until the script runs, so visitors without JavaScript are not offered it. */}
-                <li data-open-consent-item hidden>
+                {/* Shown only once pre-paint.js marks the page as scripted (global.css), so
+                    visitors without JavaScript are not offered it. */}
+                <li data-open-consent-item>
                   <button type="button" class="footer-link" data-open-consent>
                     {t.cookie.settings}
                   </button>
@@ -238,7 +245,6 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
             role="group"
             aria-label={t.accessibility.themeSelector}
             data-theme-switcher
-            hidden
           >
             {themes.map(({ key, icon }) => (
               <button

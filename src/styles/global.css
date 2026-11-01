@@ -316,6 +316,10 @@ button:disabled {
 [hidden] {
   display: none !important;
 }
+/* Controls that need the site script; pre-paint.js marks the page before it first paints. */
+html:not([data-js]) :is([data-open-consent-item], [data-theme-switcher]) {
+  display: none;
+}
 .wrap {
   width: min(1140px, calc(100% - 64px));
   margin-inline: auto;
