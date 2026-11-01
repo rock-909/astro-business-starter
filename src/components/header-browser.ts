@@ -244,13 +244,22 @@ if (fallback && drawer && body && opener && navigation && typeof drawer.showModa
   // otherwise drop the drawer at once instead of animating it away.
   const closeDrawer = () => {
     if (!drawer.open || closing !== undefined) return;
+    delete drawer.dataset.instant;
     drawer.dataset.closing = '';
     drawer.addEventListener('transitionend', onTransitionEnd);
     const duration = parseFloat(getComputedStyle(drawer).transitionDuration) || 0;
     closing = setTimeout(finishClose, duration * 1000 + 50);
   };
-  opener.addEventListener('click', () => {
+  // Keyboard actions skip the slide: Enter on a button (a click with detail 0) and Escape
+  // open and close the drawer at once.
+  const closeAtOnce = () => {
+    drawer.dataset.instant = '';
+    finishClose();
+  };
+  opener.addEventListener('click', (event) => {
     if (closing !== undefined) finishClose();
+    if (event.detail === 0) drawer.dataset.instant = '';
+    else delete drawer.dataset.instant;
     drawer.showModal();
     opener.setAttribute('aria-expanded', 'true');
     root.classList.add('drawer-open');
@@ -259,13 +268,18 @@ if (fallback && drawer && body && opener && navigation && typeof drawer.showModa
     opener.setAttribute('aria-expanded', 'false');
     root.classList.remove('drawer-open');
   });
-  header.querySelector('[data-mobile-close]')?.addEventListener('click', closeDrawer);
-  // Escape normally closes a modal dialog at once; cancelling it lets the drawer slide out.
-  // Tab wraps around inside the drawer instead of leaving for the browser's own controls.
+  header
+    .querySelector('[data-mobile-close]')
+    ?.addEventListener('click', (event) =>
+      (event as MouseEvent).detail === 0 ? closeAtOnce() : closeDrawer(),
+    );
+  // Escape closes at once. Other close requests (a phone's back gesture) are cancelled so
+  // the drawer slides out. Tab wraps around inside the drawer instead of leaving for the
+  // browser's own controls.
   drawer.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      closeDrawer();
+      closeAtOnce();
       return;
     }
     if (event.key !== 'Tab') return;
