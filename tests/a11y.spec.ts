@@ -71,17 +71,48 @@ for (const [device, viewport] of Object.entries(viewports))
         }
       });
 
-      test('the open menu and language menu pass axe', async ({ page, site }) => {
+      test('the open menu, its submenus and the language menu pass axe', async ({ page, site }) => {
         await at(page, site.pathFor(site.locales[0], 'home'));
         await rejectCookies(page, site);
         for (const locale of site.locales) {
           const t = site.messages(locale).accessibility;
           await at(page, site.pathFor(locale, 'home'));
           const banner = page.getByRole('banner');
+          const expectGroupsVisible = async (
+            within: ReturnType<Page['locator']>,
+            labels: ReturnType<Site['menuLabels']>,
+          ) => {
+            for (const name of Object.values(labels.groups)) {
+              const list = within.getByRole('list', { name, exact: true });
+              await expect(list).toBeVisible();
+              const links = await list.getByRole('link').all();
+              expect(links.length, `${locale} ${labels.label} ${name} links`).toBeGreaterThan(0);
+              for (const link of links) await expect(link).toBeVisible();
+            }
+          };
           if (device === 'phone') {
             await banner.getByRole('button', { name: t.openMenu, exact: true }).click();
-            await expect(page.getByRole('dialog', { name: t.mobileNavigation })).toBeVisible();
+            const drawer = page.getByRole('dialog', { name: t.mobileNavigation });
+            await expect(drawer).toBeVisible();
             await expectAccessible(page, `${locale} menu drawer`);
+            for (const menu of site.navMenus) {
+              const labels = site.menuLabels(locale, menu);
+              await drawer.getByText(labels.label, { exact: true }).click();
+              await expectGroupsVisible(drawer, labels);
+              await expectAccessible(page, `${locale} ${labels.label} drawer group`);
+            }
+          } else {
+            const nav = banner.getByRole('navigation', { name: t.mainNavigation });
+            for (const menu of site.navMenus) {
+              const labels = site.menuLabels(locale, menu);
+              const trigger = nav.getByRole('button', { name: labels.label, exact: true });
+              await trigger.click();
+              await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+              await expectGroupsVisible(nav, labels);
+              await expectAccessible(page, `${locale} ${labels.label} submenu`);
+              await page.keyboard.press('Escape');
+              await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            }
           }
           if (site.locales.length < 2) continue;
           const trigger = banner

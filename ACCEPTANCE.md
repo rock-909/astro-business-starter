@@ -147,6 +147,22 @@ Node 24.22.1, `TEST_PORT=5383`, Playwright's cached Chromium. The counterexample
 
 None of these checks prove live providers or deployment.
 
+## Accessibility (axe, WCAG 2.2 A/AA) tests (2026-11-01 UTC)
+
+Node 24.22.1, dependencies from `npm ci`, `CI=1`, Playwright's cached Chromium, `@axe-core/playwright` 4.14.0. `tests/a11y.spec.ts` runs in both the template and the derived-site Playwright projects.
+
+| Check | Result |
+|---|---|
+| `phone, light/dark theme > the open menu and language menu pass axe`, template, before the `SiteHeader.astro` space fix (run by the author) | Expected FAIL — `label-content-name-mismatch` on `.mobile-nav-item[aria-label="Languages: English"]`: the visible text read "LanguagesEnglish" |
+| Same test after the fix (run by the author) | PASS |
+| `axe reports a field without a label and text without contrast` (reverse check), template and derived (run by the author) | PASS — `label` and `color-contrast` reported |
+| Pixel comparison of the drawer language row with and without the space node (run by the author) | Identical pixels, equal bounding box |
+| `npm run verify`, `TEST_PORT=5273` (run by the author) | PASS — exit 0; node tests 54 pass, 0 fail; Playwright 141 passed, 7 skipped |
+| `npx playwright test tests/a11y.spec.ts`, `TEST_PORT=5293`, after review round 1 (the open menu test now opens every configured header submenu, desktop panel and phone drawer group, checks its links are visible and runs axe) | PASS — 34 passed (template and derived, including the reverse check). An earlier run of the same file while the machine's load average was about 77 hit 30 s timeouts in 5 tests, 4 of them unchanged tests; the 8 menu tests then passed on their own and the whole file passed once load fell |
+| Same menu test, template phone, with the space node removed and rebuilt (this review round) | Expected FAIL — 2/2 (light and dark) on `label-content-name-mismatch`; PASS 2/2 after restoring the space and rebuilding |
+
+The derived site has one language and a Resources submenu, so it covers submenus but not the language menu; the template has two languages and no submenu. None of these checks prove live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.
