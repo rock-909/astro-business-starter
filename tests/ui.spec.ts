@@ -1185,60 +1185,166 @@ test('the cookie card has no visible title, hugs the phone edge and floats from 
   }
 });
 
-test('the language pill offers the browser language once consent is settled, switches equivalently and stays dismissed', async ({
+// Layout shifts since the page started loading (only observers see them; buffered includes
+// the load), read once site-browser.ts has run and two frames have painted.
+async function loadShifts(page: Page, site: Site) {
+  const locale = (await page.locator('html').getAttribute('lang')) as Locale;
+  await expect(
+    page
+      .getByRole('group', { name: site.messages(locale).accessibility.themeSelector })
+      .getByRole('button', { pressed: true }),
+  ).toHaveCount(1);
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const shifts: string[] = [];
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as (PerformanceEntry & {
+            value: number;
+            sources: { node?: Node | null }[];
+          })[])
+            shifts.push(
+              `${entry.value.toFixed(4)} ${entry.sources.map((source) => (source.node as Element | null)?.className).join(',')}`,
+            );
+        }).observe({ type: 'layout-shift', buffered: true });
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(shifts)));
+      }),
+  );
+}
+
+test('the language bar sits above the header from the first paint, switches equivalently and stays dismissed', async ({
   browser,
   baseURL,
   site,
 }) => {
   const [first, second] = [homeLocale(site), secondLocale(site)];
   test.skip(!second, 'single-language site: nothing to suggest');
-  const context = await browser.newContext({ baseURL, locale: first });
-  const page = await context.newPage();
-  // A fresh context misses the shared hooks; the contact form must not load the real widget.
-  await mockWidget(page);
-  await installColorProbe(page);
   const suggested = site.messages(first).languageSuggestion;
-  const pill = page.getByRole('region', { name: suggested.label });
   const cookie = site.messages(second!).cookie;
-  await page.goto(`${contactPath(site, second!)}?utm_source=pill#inquiry`);
-  // Never together with the cookie card: it waits for the consent choice.
-  await expect(page.getByRole('region', { name: cookie.title })).toBeVisible();
-  await expect(pill).toBeHidden();
-  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
-  // Written in the language it offers.
-  await expect(pill).toBeVisible();
-  await expect(pill).toHaveAttribute('lang', first);
-  await expect(pill).toContainText(suggested.message);
-  // Reopening cookie settings hides it again until the visitor chooses.
-  await page.getByRole('button', { name: cookie.settings, exact: true }).click();
-  await expect(pill).toBeHidden();
-  await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
-  await expect(pill).toBeVisible();
-  // Centred at the bottom of the viewport.
-  await settled(page);
-  const box = (await pill.boundingBox())!;
-  const viewport = page.viewportSize()!;
-  const pageWidth = await page.evaluate(() => document.documentElement.clientWidth);
-  expect(Math.abs(box.x + box.width / 2 - pageWidth / 2)).toBeLessThanOrEqual(1);
-  expect(box.y + box.height).toBe(viewport.height - 20);
-  // Switching keeps the equivalent page, query and hash, and is remembered.
-  await pill.getByRole('link', { name: suggested.switchAction, exact: true }).click();
-  await expect(page).toHaveURL(`${contactPath(site, first)}?utm_source=pill#inquiry`);
-  await expect(pill).toHaveCount(0);
-  const back = site.messages(second!).languageSuggestion;
-  await page.goto(contactPath(site, second!));
-  await expect(page.getByRole('region', { name: back.label })).toHaveCount(0);
-  await expect(pill).toBeVisible();
-  // Dismissing keeps the current language and the pill stays away after a reload.
-  await pill.getByRole('button', { name: suggested.dismiss, exact: true }).click();
-  await expect(pill).toBeHidden();
-  await page.reload();
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(pill).toBeHidden();
-  await context.close();
+  // Privacy has no form, so the Turnstile widget's own load does not count here.
+  const path = (locale: Locale) => site.pathFor(locale, 'privacy');
+  const query = '?utm_source=bar#main-content';
+  for (const [width, height] of [
+    [390, 844],
+    [1350, 940],
+  ]) {
+    const where = `${width}px`;
+    const context = await browser.newContext({
+      baseURL,
+      locale: first,
+      viewport: { width: width!, height: height! },
+      reducedMotion: 'reduce',
+    });
+    const page = await context.newPage();
+    const bar = page.getByRole('region', { name: suggested.label });
+    await page.goto(path(second!));
+    // A first visit: it is already there, together with the cookie card, and nothing moved.
+    expect(await loadShifts(page, site), where).toEqual([]);
+    await expect(bar).toBeVisible();
+    await expect(page.getByRole('region', { name: cookie.title })).toBeVisible();
+    // Written in the language it offers, full width at the very top, above the header.
+    await expect(bar).toHaveAttribute('lang', first);
+    await expect(bar).toContainText(suggested.message);
+    const box = (await bar.boundingBox())!;
+    const header = (await page.getByRole('banner').boundingBox())!;
+    const pageWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    expect([box.x, box.y, box.width], where).toEqual([0, 0, pageWidth]);
+    expect(header.y, where).toBe(box.height);
+    // One line on a wide screen; on a phone it wraps inside the page width.
+    if (width! > 1000) expect(box.height, where).toBeLessThanOrEqual(45);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+      where,
+    ).toBeLessThanOrEqual(pageWidth);
+    const close = bar.getByRole('button', { name: suggested.dismiss, exact: true });
+    const closeBox = (await close.boundingBox())!;
+    expect(closeBox.x + closeBox.width, where).toBeLessThanOrEqual(pageWidth);
+    // It appears without animation.
+    expect(await bar.evaluate((section) => getComputedStyle(section).animationName)).toBe('none');
+    // Keyboard: after the skip link, its link and close button come before the header.
+    const link = bar.getByRole('link', { name: suggested.switchAction, exact: true });
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(link).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    // Switching keeps the equivalent page, query and hash, and is remembered.
+    await page.goto(`${path(second!)}${query}`);
+    await link.click();
+    await expect(page).toHaveURL(`${path(first)}${query}`);
+    await expect(page.locator('[data-language-suggestion]:visible')).toHaveCount(0);
+    await page.goto(path(second!));
+    await expect(bar).toBeVisible();
+    // Closing keeps the current language; it stays away after a reload, and nothing moves.
+    await close.click();
+    await expect(bar).toBeHidden();
+    await page.reload();
+    expect(await loadShifts(page, site), where).toEqual([]);
+    await expect(bar).toBeHidden();
+    await context.close();
+  }
 });
 
-test('dismissing the language pill holds for the page when storage refuses writes', async ({
+test('a returning visitor sees the language bar from the first paint and the footer stays put', async ({
+  browser,
+  baseURL,
+  site,
+}) => {
+  const [first, second] = [homeLocale(site), secondLocale(site)];
+  test.skip(!second, 'single-language site: nothing to suggest');
+  // Both directions: each language's visitor is offered their own on the other's page.
+  for (const [browserLocale, pageLocale] of [
+    [first, second!],
+    [second!, first],
+  ]) {
+    for (const [width, height] of [
+      [390, 844],
+      [1350, 940],
+    ]) {
+      const where = `${browserLocale} visitor on ${pageLocale} at ${width}px`;
+      const context = await browser.newContext({
+        baseURL,
+        locale: browserLocale,
+        viewport: { width: width!, height: height! },
+      });
+      const page = await context.newPage();
+      const bar = page.getByRole('region', {
+        name: site.messages(browserLocale).languageSuggestion.label,
+      });
+      await page.goto(site.pathFor(pageLocale, 'home'));
+      await dismissConsent(page, site);
+      await page.reload();
+      expect(await loadShifts(page, site), where).toEqual([]);
+      await expect(bar, where).toBeVisible();
+      // The footer ends the page, with no room kept for an overlay.
+      const [footerEnd, pageEnd] = await page.evaluate(() => [
+        document.querySelector('footer')!.getBoundingClientRect().bottom + scrollY,
+        document.body.getBoundingClientRect().bottom + scrollY,
+      ]);
+      expect(footerEnd, where).toBeCloseTo(pageEnd, 0);
+      await context.close();
+    }
+  }
+});
+
+test('a visitor whose browser language is the page language never sees the language bar', async ({
+  browser,
+  baseURL,
+  site,
+}) => {
+  for (const locale of site.locales) {
+    const context = await browser.newContext({ baseURL, locale });
+    const page = await context.newPage();
+    for (const key of ['home', 'privacy'] as const) {
+      await page.goto(site.pathFor(locale, key));
+      expect(await loadShifts(page, site)).toEqual([]);
+      await expect(page.locator('[data-language-suggestion]:visible')).toHaveCount(0);
+    }
+    await context.close();
+  }
+});
+
+test('closing the language bar holds for the page when storage refuses writes', async ({
   browser,
   baseURL,
   site,
@@ -1253,21 +1359,21 @@ test('dismissing the language pill holds for the page when storage refuses write
     };
   });
   const suggested = site.messages(first).languageSuggestion;
-  const pill = page.getByRole('region', { name: suggested.label });
+  const bar = page.getByRole('region', { name: suggested.label });
   const cookie = site.messages(second!).cookie;
   await page.goto(site.pathFor(second!, 'privacy'));
+  await expect(bar).toBeVisible();
+  await bar.getByRole('button', { name: suggested.dismiss, exact: true }).click();
+  await expect(bar).toBeHidden();
+  // Settling cookie settings leaves the dismissal in place.
   await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
-  await expect(pill).toBeVisible();
-  await pill.getByRole('button', { name: suggested.dismiss, exact: true }).click();
-  await expect(pill).toBeHidden();
-  // Reopening and settling cookie settings re-syncs the pill; the dismissal still holds.
   await page.getByRole('button', { name: cookie.settings, exact: true }).click();
   await page.getByRole('button', { name: cookie.rejectAll, exact: true }).click();
-  await expect(pill).toBeHidden();
+  await expect(bar).toBeHidden();
   await context.close();
 });
 
-test('choosing a language in the header is remembered, so the pill does not offer the one just left', async ({
+test('choosing a language in the header is remembered, so the bar does not offer the one just left', async ({
   browser,
   baseURL,
   site,

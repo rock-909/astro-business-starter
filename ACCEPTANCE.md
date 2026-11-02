@@ -121,6 +121,20 @@ Node 24.22.1, dependencies from `npm ci`, `CI=1`, Playwright's cached Chromium. 
 
 None of these checks prove live providers or deployment.
 
+## Language suggestion moves to a bar above the header (2026-11-01 UTC)
+
+Node 24.22.1, `TEST_PORT=5383`, Playwright's cached Chromium. The counterexample replaced only the named source, rebuilt with `npm run build:test`, and was reverted before the final run.
+
+| Check | Result |
+|---|---|
+| `npm run verify` | PASS — exit 0; node tests 54 pass, 0 fail (includes the CSP hash check for the extended pre-paint script); Playwright 110 passed, 8 skipped (single-language derived site) |
+| `npx prettier --check .` | PASS |
+| `npx playwright test -g "language bar\|language in the header\|footer does not move"` | PASS — 8 passed, 4 skipped |
+| Counterexample: `SiteLayout.astro` without the pre-paint reveal rules (bar shown only once `site-browser.ts` runs) | Expected FAIL — the first-visit test at 390px (`0.0580` layout shift) and the returning-visitor test (`0.0298`); PASS again after revert |
+| Contact page at 1350px with the Turnstile fixture, browser language with and without a suggestion | Layout shifts of about `0.01` in both cases from the fixture widget filling in, unrelated to the bar; the first-visit test therefore uses the Privacy page |
+
+None of these checks prove live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.
