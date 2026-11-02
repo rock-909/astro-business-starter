@@ -12,13 +12,14 @@
     "build": "astro build",
     "build:test": "node scripts/build-test.mjs",
     "check": "node --input-type=module -e \"await import('@astrojs/check')\" && astro check",
+    "lint": "eslint . --max-warnings=0",
     "readiness": "node scripts/readiness.mjs",
     "preview": "astro preview --host 127.0.0.1",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run check && npm run build:test && npm test && npm run test:browser"
+    "verify": "npm run lint && npm run check && npm run build:test && npm test && npm run test:browser"
   },
   "dependencies": {
     "astro": "7.4.2",
@@ -27,10 +28,15 @@
   "devDependencies": {
     "@astrojs/check": "0.9.12",
     "@emnapi/runtime": "1.11.3",
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.1",
+    "eslint": "10.14.0",
+    "eslint-plugin-astro": "3.2.1",
+    "globals": "17.13.0",
     "prettier": "3.9.10",
     "prettier-plugin-astro": "1.1.2",
     "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
     "wrangler": "4.154.0"
   },
   "allowScripts": {

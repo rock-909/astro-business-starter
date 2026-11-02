@@ -7,6 +7,7 @@ paths:
   - "package.json"
   - "package-lock.json"
   - "tsconfig.json"
+  - "eslint.config.mjs"
 ---
 
 # 验证证据
@@ -20,6 +21,7 @@ paths:
 
 | 验证目的 | 现有命令 |
 | --- | --- |
+| 可能缺陷（ESLint，零警告） | `npm run lint` |
 | Astro/应用类型 | `npm run check` |
 | 代码格式（Prettier） | `npm run format:check` |
 | 生成离线测试用构建 | `npm run build:test` |
