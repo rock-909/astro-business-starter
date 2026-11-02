@@ -4,7 +4,6 @@ import { axeViolations, violatedRules } from './axe';
 // Every page and every state a visitor meets passes axe's WCAG 2.2 A/AA rules, in both
 // themes, on a phone and on a desktop. The template and the derived-site fixture each run
 // this file through their own Playwright project.
-type Locale = Site['locales'][number];
 const widgetScript = `window.turnstile={render(el,options){el.style.display='block';el.style.width='300px';options.callback('fixture-token');return 'fixture-widget';},reset(){}};`;
 const viewports = {
   phone: { width: 390, height: 844 },
