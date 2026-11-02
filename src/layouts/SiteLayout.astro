@@ -16,6 +16,7 @@ import {
 } from '../site';
 import SiteHeader from '../components/SiteHeader.astro';
 import Icon from '../components/Icon.astro';
+import consentRecord from '../components/consent-record.js?raw';
 import prePaint from '../components/pre-paint.js?raw';
 import '../styles/global.css';
 interface Props {
@@ -27,6 +28,8 @@ interface Props {
 }
 const { locale, page = 'home', title, description, notFound = false } = Astro.props;
 const t = messages(locale);
+// The stored-consent rule site-browser.ts imports, as a block-scoped helper for pre-paint.js.
+const prePaintScript = `{${consentRecord.replace(/^export /m, '')}${prePaint}}`;
 const url = canonical(locale, page);
 // The home page title is the whole <title>; other pages go through the template.
 const fullTitle =
@@ -131,7 +134,7 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
         stored theme and settles the script-only footer controls, the cookie card and the
         language bar, so nothing moves later. The CSP allows this exact text by its sha256 hash in
         public/_headers and src/security-headers.ts; tests fail if the two drift apart. */}
-    <script is:inline set:html={prePaint} />
+    <script is:inline set:html={prePaintScript} />
     {suggestionReveal && <style is:inline set:html={suggestionReveal} />}
   </head>
   <body

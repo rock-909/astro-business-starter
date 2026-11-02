@@ -1,4 +1,6 @@
-// Inlined in <head>; the CSP allows this exact text by hash (see SiteLayout.astro).
+// Inlined in <head> after consent-record.js; the CSP allows this exact text by hash (see
+// SiteLayout.astro).
+/* global storedConsent */
 {
   const root = document.documentElement;
   root.dataset.js = '';
@@ -8,7 +10,7 @@
     else if (theme === 'system') delete root.dataset.theme;
   } catch {}
   try {
-    if (!localStorage.getItem('cookie-consent')) root.dataset.consentPending = '';
+    if (!storedConsent(localStorage.getItem('cookie-consent'))) root.dataset.consentPending = '';
   } catch {
     root.dataset.consentPending = '';
   }

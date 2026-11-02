@@ -7,5 +7,5 @@ export const securityHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Strict-Transport-Security': 'max-age=31536000',
   'Content-Security-Policy':
-    "default-src 'self'; script-src 'self' 'sha256-MSNV+aRVo8L+KoKc2U/HKXxKgOYQwxYRHfJ2Yke2MkQ=' https://challenges.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google-analytics.com; connect-src 'self' https://challenges.cloudflare.com https://www.google-analytics.com https://region1.google-analytics.com; frame-src https://challenges.cloudflare.com; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    "default-src 'self'; script-src 'self' 'sha256-AtRSHC4QvvhY5gDDa8wPD89gt+YQTZzxyA4uHKSfZIQ=' https://challenges.cloudflare.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google-analytics.com; connect-src 'self' https://challenges.cloudflare.com https://www.google-analytics.com https://region1.google-analytics.com; frame-src https://challenges.cloudflare.com; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 } as const;
