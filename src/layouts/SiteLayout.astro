@@ -63,6 +63,14 @@ const themes = [
 ] as const;
 // Offered only where the page has the same content in another language (not on 404 pages).
 const suggestedLocales = notFound ? [] : otherLocales;
+// pre-paint.js names the suggested language on <html> before first paint; these rules
+// show that language's bar from the first frame, before site-browser.ts takes over.
+const suggestionReveal = suggestedLocales
+  .map(
+    (language) =>
+      `html[data-language-suggest="${language}"] [data-language-suggestion="${language}"][hidden]{display:block!important}`,
+  )
+  .join('');
 const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID || '')
   ? import.meta.env.PUBLIC_GA_MEASUREMENT_ID
   : '';
@@ -120,10 +128,11 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
     )}
     <link rel="icon" href={site.brandAssets.favicon} />
     {/* Inline so it runs before first paint without a render-blocking request. It applies the
-        stored theme and settles the script-only footer controls and cookie card, so the
-        footer does not move later. The CSP allows this exact text by its sha256 hash in
+        stored theme and settles the script-only footer controls, the cookie card and the
+        language bar, so nothing moves later. The CSP allows this exact text by its sha256 hash in
         public/_headers and src/security-headers.ts; tests fail if the two drift apart. */}
     <script is:inline set:html={prePaint} />
+    {suggestionReveal && <style is:inline set:html={suggestionReveal} />}
   </head>
   <body
     data-locale={locale}
@@ -133,6 +142,43 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
     <a class="skip-link" href="#main-content">
       {t.accessibility.skipToContent}
     </a>
+    {/* Language suggestion: a full-width bar above the header in the page flow, written in
+        the language it offers. One per language it can suggest, all hidden; pre-paint.js and
+        then site-browser.ts reveal the right one. */}
+    {suggestedLocales.map((language) => {
+      const copy = messages(language).languageSuggestion;
+      return (
+        <section
+          class="language-suggestion"
+          data-language-suggestion={language}
+          lang={language}
+          aria-label={copy.label}
+          hidden
+        >
+          <div class="language-suggestion-inner">
+            <p>
+              {copy.message}{' '}
+              <a
+                class="text-link"
+                data-locale-link={language}
+                href={pathFor(language, page)}
+                hreflang={language}
+              >
+                {copy.switchAction}
+              </a>
+            </p>
+            <button
+              type="button"
+              class="button ghost"
+              data-language-dismiss
+              aria-label={copy.dismiss}
+            >
+              <Icon name="x" />
+            </button>
+          </div>
+        </section>
+      );
+    })}
     <SiteHeader locale={locale} page={page} notFound={notFound} />
     {import.meta.env.PUBLIC_APP_ENV !== 'production' && (
       <div class="experiment-strip">
@@ -303,40 +349,6 @@ const publicGaId = /^G-[A-Z0-9]+$/.test(import.meta.env.PUBLIC_GA_MEASUREMENT_ID
         </button>
       </div>
     </section>
-    {suggestedLocales.length > 0 && (
-      <div class="language-suggestions" data-language-suggestions>
-        {suggestedLocales.map((language) => {
-          const copy = messages(language).languageSuggestion;
-          return (
-            <section
-              class="language-suggestion"
-              data-language-suggestion={language}
-              lang={language}
-              aria-label={copy.label}
-              hidden
-            >
-              <p>{copy.message}</p>
-              <a
-                class="button outline small"
-                data-locale-link={language}
-                href={pathFor(language, page)}
-                hreflang={language}
-              >
-                {copy.switchAction}
-              </a>
-              <button
-                type="button"
-                class="button ghost"
-                data-language-dismiss
-                aria-label={copy.dismiss}
-              >
-                <Icon name="x" />
-              </button>
-            </section>
-          );
-        })}
-      </div>
-    )}
     <script>
       import '../components/site-browser';
     </script>

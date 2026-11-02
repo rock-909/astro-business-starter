@@ -9,9 +9,8 @@ const customize = document.querySelector<HTMLButtonElement>('[data-consent-custo
 const analytics = document.querySelector<HTMLInputElement>('[data-consent-analytics]')!;
 const advertising = document.querySelector<HTMLInputElement>('[data-consent-advertising]')!;
 const gaId = document.body.dataset.gaId || '';
-// Language suggestion pills (see syncLanguageSuggestion below).
+// Language suggestion bars above the header (see syncLanguageSuggestion below).
 const suggestions = [...document.querySelectorAll<HTMLElement>('[data-language-suggestion]')];
-const suggestionArea = document.querySelector<HTMLElement>('[data-language-suggestions]');
 const pageLocale = document.body.dataset.locale!;
 // The page's hreflang alternates are the languages it really exists in (404 pages have none).
 const pageLocales = [
@@ -97,7 +96,6 @@ function syncConsent() {
   delete document.documentElement.dataset.consentPending;
   analytics.checked = stored?.analytics || false;
   advertising.checked = stored?.advertising || false;
-  syncLanguageSuggestion();
 }
 function choose(consent: Consent) {
   try {
@@ -113,7 +111,6 @@ function choose(consent: Consent) {
   banner.hidden = true;
   if (hadFocus && opener?.isConnected) opener.focus();
   opener = null;
-  syncLanguageSuggestion();
 }
 function reopen(trigger?: HTMLElement) {
   if (trigger) opener = trigger;
@@ -133,7 +130,6 @@ function reopen(trigger?: HTMLElement) {
   choices.hidden = true;
   customize.setAttribute('aria-expanded', 'false');
   banner.hidden = false;
-  syncLanguageSuggestion();
   customize.focus();
 }
 document
@@ -209,7 +205,8 @@ window.addEventListener('storage', (event) => {
 syncTheme();
 
 // Language suggestion: when the browser prefers another registered language that this page
-// also exists in, a pill offers it. Never at the same time as the cookie card.
+// also exists in, a bar above the header offers it. pre-paint.js makes the same choice before
+// first paint; from here the hidden attribute decides.
 function rememberLocale(locale: string) {
   chosenLocale = locale;
   try {
@@ -246,17 +243,18 @@ function preferredLocale() {
   return null;
 }
 function syncLanguageSuggestion() {
-  const preferred = banner.hidden ? preferredLocale() : null;
+  const preferred = preferredLocale();
   for (const suggestion of suggestions)
     suggestion.hidden =
       preferred === pageLocale || suggestion.dataset.languageSuggestion !== preferred;
+  delete document.documentElement.dataset.languageSuggest;
 }
 for (const button of document.querySelectorAll('[data-language-dismiss]'))
   button.addEventListener('click', () => {
     rememberLocale(pageLocale);
     syncLanguageSuggestion();
   });
-// Choosing a language anywhere (header or pill) remembers it, so the pill does not offer the
+// Choosing a language anywhere (header or bar) remembers it, so the bar does not offer the
 // language just left. Listening on the document runs after the links' own handlers, which
 // cancel the switch while an inquiry is pending.
 document.addEventListener('click', (event) => {
@@ -271,14 +269,7 @@ window.addEventListener('storage', (event) => {
   chosenLocale = null;
   syncLanguageSuggestion();
 });
-if (suggestionArea)
-  // Footer space so the pill never covers the last controls when scrolled to the end.
-  new ResizeObserver(() =>
-    document.documentElement.style.setProperty(
-      '--language-suggestion-space',
-      `${suggestionArea.offsetHeight + 40}px`,
-    ),
-  ).observe(suggestionArea);
+syncLanguageSuggestion();
 
 for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-locale-link]')) {
   const updateTarget = () => {

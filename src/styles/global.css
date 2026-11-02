@@ -70,8 +70,6 @@
   --overlay-scrim: oklch(0 0 0 / 0.5);
   --shadow: 0 10px 15px -3px oklch(0 0 0 / 0.1), 0 4px 6px -4px oklch(0 0 0 / 0.1);
   --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.05);
-  /* The language pill is translucent over a 12px blur, like the reference site. */
-  --suggestion-bg: color-mix(in oklab, var(--popover) 80%, transparent);
 
   /* Brand colour is for primary buttons only: step 11 with white text in light (step 9 misses 4.5:1). */
   --button-primary-bg: var(--brand-11);
@@ -231,13 +229,6 @@ main {
 /* Keep keyboard focus and the last footer controls above the open cookie card (WCAG 2.4.11). */
 html:has([data-cookie-banner]:not([hidden])) {
   scroll-padding-bottom: var(--cookie-banner-space, 0px);
-}
-/* The language pill reserves the same room while it is shown (never with the cookie card). */
-html:has([data-language-suggestion]:not([hidden])) {
-  scroll-padding-bottom: var(--language-suggestion-space, 0px);
-}
-html:has([data-language-suggestion]:not([hidden])) body {
-  padding-bottom: var(--language-suggestion-space, 0px);
 }
 /* Links carry no underline by default; components and .text-link add the cue they need. */
 a {
@@ -1609,59 +1600,38 @@ textarea[aria-invalid='true'] {
     align-self: flex-start;
   }
 }
-/* Language suggestion: a pill centred at the bottom, translucent over a blur. */
-.language-suggestions {
-  position: fixed;
-  z-index: 40;
-  right: 0;
-  bottom: 12px;
-  left: 0;
-  display: flex;
-  justify-content: center;
-  padding: 0 16px;
-  pointer-events: none;
-}
+/* Language suggestion: a quiet full-width bar above the header, in the page flow like the
+   reference site's region bar, so it pushes the page down and covers nothing. It is shown
+   before first paint (see SiteLayout.astro) and never animates in. One line on wide screens;
+   on a phone the text wraps beside the close button. */
 .language-suggestion {
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+.language-suggestion-inner {
   display: flex;
-  max-width: 100%;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--card-radius);
-  background: var(--suggestion-bg);
-  color: var(--popover-foreground);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
-  pointer-events: auto;
-  animation: overlay-enter 200ms var(--ease-out-strong);
+  max-width: 1080px;
+  margin-inline: auto;
+  padding: 6px 12px 6px 24px;
 }
 .language-suggestion p {
+  flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 20px;
 }
-.language-suggestion .button {
-  border-radius: 9999px;
+.language-suggestion .text-link {
+  white-space: nowrap;
 }
 .language-suggestion .button.ghost {
   width: 32px;
   height: 32px;
   padding: 0;
   color: var(--muted-foreground);
-}
-@media (min-width: 640px) {
-  .language-suggestions {
-    bottom: 20px;
-  }
-  .language-suggestion {
-    gap: 12px;
-    border-radius: 9999px;
-  }
-  .language-suggestion p {
-    font-size: 14px;
-  }
 }
 /* Overlays fade in and rise 0.5rem (with reduced motion they only fade, see below). */
 @keyframes overlay-enter {
@@ -1734,8 +1704,7 @@ textarea[aria-invalid='true'] {
   .drawer::backdrop {
     transition-duration: 200ms !important;
   }
-  .cookie-banner,
-  .language-suggestion {
+  .cookie-banner {
     animation-name: overlay-fade;
     animation-duration: 200ms !important;
   }
