@@ -131,6 +131,7 @@ Node 24.22.1, `TEST_PORT=5383`, Playwright's cached Chromium. The counterexample
 | `npx prettier --check .` | PASS |
 | `npx playwright test -g "language bar\|language in the header\|footer does not move"` | PASS — 8 passed, 4 skipped |
 | Counterexample: `SiteLayout.astro` without the pre-paint reveal rules (bar shown only once `site-browser.ts` runs) | Expected FAIL — the first-visit test at 390px (`0.0580` layout shift) and the returning-visitor test (`0.0298`); PASS again after revert |
+| Reference search for the removed bottom pill: `git grep -n -E 'data-language-suggestions\|--language-suggestion-space\|--suggestion-bg\|suggestionArea\|language pill' -- . ':!package-lock.json'` | No users left in `src` or `tests`; only the historical PR3 rows of this file mention the language pill |
 | Contact page at 1350px with the Turnstile fixture, browser language with and without a suggestion | Layout shifts of about `0.01` in both cases from the fixture widget filling in, unrelated to the bar; the first-visit test therefore uses the Privacy page |
 
 None of these checks prove live providers or deployment.
