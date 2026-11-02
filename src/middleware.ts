@@ -24,6 +24,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   } catch (error) {
     if (!(error instanceof ActionError)) throw error;
     const serialized = serializeActionResult({ data: undefined, error });
+    // eslint-disable-next-line preserve-caught-error -- invariant failure; keep the handled error out of logs
     if (serialized.type !== 'error') throw new Error('Unexpected action serialization');
     return secure(
       new Response(serialized.body, {

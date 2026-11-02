@@ -42,7 +42,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      # Same steps as local: check, build:test, test, test:browser.
+      # Same steps as local: lint, check, build:test, test, test:browser.
       - name: Verify
         run: npm run verify
 

@@ -31,6 +31,17 @@ The audit fixes environment/readiness and optional company configuration, curren
 
 Markdown, YAML, `.claude/` and the lockfile are excluded by `.prettierignore`. The reformat commit is mechanical `prettier --write .` output; the build, node and browser regression results for it come from the `verify` run, not from this section.
 
+## ESLint (2026-11-01 UTC)
+
+| Check | Result |
+|---|---|
+| `npm run lint` after `npm ci` | PASS — exit 0, `eslint . --max-warnings=0` reports no problems |
+| Counterexample (floating `Promise.resolve(a)`, `a == "1"` and `parseInt(a)` appended to `src/lib/text.ts`, then reverted) | Expected exit 1 — 3 errors: `@typescript-eslint/no-floating-promises`, `eqeqeq`, `radix`; after `git checkout -- src/lib/text.ts`, exit 0 again |
+| `npm run check` | PASS — 0 errors, warnings or hints (45 files) |
+| Reference search (`git grep -n -e 'npm run lint' -e eslint`) | `package.json` scripts `lint` and `verify` and devDependencies (`eslint`, `@eslint/js`, `eslint-plugin-astro`, `typescript-eslint`), `eslint.config.mjs`, `.github/workflows/ci.yml` via `npm run verify`, `README.md`, `.claude/rules/testing-runtime.md` paths and command table, `.no-mistakes.yaml` `lint`; three justified inline disables in `InlineMarkdown.astro`, `site-browser.ts` and `middleware.ts` |
+
+`npm ci` reports 12 moderate `npm audit` hits. All come from `minimatch <11.0.1` (GHSA-g3hv-75wg-m249) pulled in by the dev-only ESLint toolchain (`@eslint/config-array`, `typescript-eslint` packages); they are not in the Worker bundle. `npm audit fix --force` would downgrade to `eslint@4`, so no fix is compatible with ESLint 10, and `.claude/rules/dependencies.md` forbids `overrides` and `--force`.
+
 ## Launch-safety readiness and Workers Logs (2026-10-30 UTC)
 
 Node 24.22.1, dependencies from `npm ci`. "Before" runs replace only `scripts/readiness.mjs` with the named revision and keep the current tests.

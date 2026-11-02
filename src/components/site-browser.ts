@@ -51,6 +51,7 @@ function applyConsent(consent: Consent) {
   const dataLayer: unknown[] = Array.isArray(globals.dataLayer) ? globals.dataLayer : [];
   globals.dataLayer = dataLayer;
   gtag = function (..._args: unknown[]) {
+    // eslint-disable-next-line prefer-rest-params -- gtag.js reads only the Arguments object
     dataLayer.push(arguments);
   };
   globals.gtag = gtag;
