@@ -163,6 +163,25 @@ Node 24.22.1, dependencies from `npm ci`, `CI=1`, Playwright's cached Chromium, 
 
 The derived site has one language and a Resources submenu, so it covers submenus but not the language menu; the template has two languages and no submenu. None of these checks prove live providers or deployment.
 
+## Cookie card settled before first paint for older or incomplete consent records (2026-11-01 UTC)
+
+Node 24.22.1, `CI=1`, Playwright's cached Chromium. The pre-paint script and `site-browser.ts` now share one stored-consent validity rule, `storedConsent` in `src/components/consent-record.js`; `SiteLayout.astro` inlines it ahead of `pre-paint.js`, and the inline-script CSP hash in `public/_headers` and `src/security-headers.ts` follows the new text. All checks below were run by the author.
+
+| Check | Result |
+|---|---|
+| `npm run build:test`, then `TEST_PORT=4473 npx playwright test tests/ui.spec.ts -g "footer does not move while the home page loads" --project=template`, with the new older-version and incomplete record visits but the sources from `4ccd2e2` | Expected FAIL — at `older record visit at 390px`: layout shift `0.0804 FOOTER` |
+| Same test after the fix, template and derived projects | PASS |
+| `npx eslint . --max-warnings=0 --ignore-pattern .probe/` | PASS — the ignore pattern excludes an untracked stray `.probe/` build-output folder in the worktree (342 unrelated errors), not project sources |
+| `npm run check` | PASS — 0 errors |
+| `npm run build:test` | PASS |
+| `npm test` | PASS — includes the CSP inline-script hash check in `tests/action.test.mjs` against the new hash |
+| `npm run test:browser` | PASS — 144 passed, 8 skipped |
+| Storage unavailable (`localStorage` throws) | `html[data-consent-pending]` is still set, so the card is in the page flow from first paint |
+| Reference search for the old hash (`git grep -n 'MSNV+aRVo8L'`) | No matches |
+| Reference search for the shared rule (`git grep -n -e storedConsent -e consent-record -- src tests`) | Definition in `consent-record.js`; `site-browser.ts` import and runtime call; `SiteLayout.astro` raw inline; `pre-paint.js` first-paint call |
+
+`npm run verify` was not run as one command; its steps were run separately as above. None of these checks prove the deployed site, browsers other than Chromium, live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.
