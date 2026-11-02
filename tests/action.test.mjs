@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parse } from 'devalue';
 import { readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
   startHarness,
   action,
@@ -561,6 +562,25 @@ function assertIsolationHeaders(response) {
   assert.equal(response.headers.get('strict-transport-security'), 'max-age=31536000');
 }
 
+// The browser runs an inline script only when its exact text hashes to a source the
+// response's CSP lists, so an edited script without a new hash would silently not run.
+function assertInlineScriptsAllowed(response, html, path) {
+  const scriptSrc = response.headers
+    .get('content-security-policy')
+    .split(';')
+    .map((directive) => directive.trim().split(/\s+/))
+    .find(([name]) => name === 'script-src');
+  assert.ok(!scriptSrc.includes("'unsafe-inline'"), `${path} script-src`);
+  const inline = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter(
+    ([, attributes]) => !/\bsrc=/.test(attributes) && !/application\/ld\+json/.test(attributes),
+  );
+  assert.ok(inline.length > 0, `${path} has the inline pre-paint script`);
+  for (const [, , text] of inline) {
+    const hash = `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
+    assert.ok(scriptSrc.includes(hash), `${path}: CSP script-src must list ${hash}`);
+  }
+}
+
 // The template and a derived site (contact methods, logo, social links, company, own
 // copy) run the same Worker paths; expectations come from each build's own site config.
 for (const root of ['.', derivedRoot]) {
@@ -588,6 +608,7 @@ for (const root of ['.', derivedRoot]) {
           assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
           assertIsolationHeaders(response);
           const html = await response.text();
+          assertInlineScriptsAllowed(response, html, path);
           assert.match(html, /noindex,nofollow/);
           assert.equal((html.match(/<main\b/g) || []).length, 1);
           assert.match(html, /rel="canonical"/);
@@ -690,6 +711,8 @@ for (const root of ['.', derivedRoot]) {
         const response = await get(path);
         assert.equal(response.status, 404, path);
         assertIsolationHeaders(response);
+        // Rendered by the Worker, so this checks src/security-headers.ts, not public/_headers.
+        assertInlineScriptsAllowed(response, await response.text(), path);
       }
       const client = readdirSync(`${root}/dist/client`, { recursive: true })
         .filter((file) => /\.(js|html)$/.test(file))

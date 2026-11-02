@@ -232,9 +232,6 @@ main {
 html:has([data-cookie-banner]:not([hidden])) {
   scroll-padding-bottom: var(--cookie-banner-space, 0px);
 }
-html:has([data-cookie-banner]:not([hidden])) body {
-  padding-bottom: var(--cookie-banner-space, 0px);
-}
 /* The language pill reserves the same room while it is shown (never with the cookie card). */
 html:has([data-language-suggestion]:not([hidden])) {
   scroll-padding-bottom: var(--language-suggestion-space, 0px);
@@ -315,6 +312,10 @@ button:disabled {
 }
 [hidden] {
   display: none !important;
+}
+/* Controls that need the site script; pre-paint.js marks the page before it first paints. */
+html:not([data-js]) :is([data-open-consent-item], [data-theme-switcher]) {
+  display: none;
 }
 .wrap {
   width: min(1140px, calc(100% - 64px));
@@ -1086,12 +1087,19 @@ p {
 }
 /* Cookie card: full width on the bottom edge of a phone with a top border only; a floating
    480px card from 640px (bottom right), at the bottom left from 1024px. */
+/* The card is in the page flow and sticks to the window bottom, so on a short page its own
+   box (plus the margin gap) lifts the footer above it from the first paint instead of
+   padding added after the script measures it. pre-paint.js shows it before first paint
+   when no choice is stored; site-browser.ts takes over through the hidden attribute. */
+html[data-consent-pending] .cookie-banner[hidden] {
+  display: flex !important;
+}
 .cookie-banner {
-  position: fixed;
+  position: sticky;
   z-index: 40;
-  right: 0;
   bottom: 0;
-  left: 0;
+  flex-shrink: 0;
+  margin-top: 24px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1575,9 +1583,9 @@ textarea[aria-invalid='true'] {
 }
 @media (min-width: 640px) {
   .cookie-banner {
-    left: auto;
-    right: 20px;
+    align-self: flex-end;
     bottom: 20px;
+    margin: 4px 20px 20px;
     width: 480px;
     max-height: calc(100dvh - 40px);
     gap: 12px;
@@ -1598,8 +1606,7 @@ textarea[aria-invalid='true'] {
 }
 @media (min-width: 1024px) {
   .cookie-banner {
-    right: auto;
-    left: 20px;
+    align-self: flex-start;
   }
 }
 /* Language suggestion: a pill centred at the bottom, translucent over a blur. */
