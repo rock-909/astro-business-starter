@@ -1,6 +1,6 @@
 # 派生站点上线与交接
 
-本文件负责派生站点从“模板拒绝上线”到“正式上线”的步骤和交接。模板自身不是可上线站点，`npm run readiness` 与生产构建对它的拒绝应继续生效。本项目没有部署流水线、GitHub Environment 或灰度发布；以下步骤由站点负责人在 Cloudflare 和各供应商处完成。
+本文件负责派生站点从“模板拒绝上线”到“正式上线”的步骤和交接。模板自身不是可上线站点，`npm run readiness` 与生产构建对它的拒绝应继续生效。部署用命令手动执行，或在 GitHub Actions 手动运行部署流水线（第 3 节），流水线需要站点负责人先创建 GitHub Environment 与 Cloudflare token；本项目没有自动部署或灰度发布。其余步骤由站点负责人在 Cloudflare 和各供应商处完成。
 
 ## 1. 替换内容并通过静态门禁
 
@@ -22,7 +22,7 @@
    PUBLIC_APP_ENV=production npm run build && npx wrangler deploy
    ```
 
-   `wrangler deploy` 上传 `dist/` 里现有的构建（读取生成的 `dist/server/wrangler.json`）。`npm run verify` 会在 `dist/` 写入带测试 widget key、noindex 的测试构建，生产构建被门禁拦下时它仍留在那里，所以只用 `&&` 把部署接在一次成功的生产构建之后，不要单独执行 `wrangler deploy`。
+   `wrangler deploy` 上传 `dist/` 里现有的构建（读取生成的 `dist/server/wrangler.json`）。`npm run verify` 会在 `dist/` 写入带测试 widget key、noindex 的测试构建，生产构建被门禁拦下时它仍留在那里，所以只用 `&&` 把部署接在一次成功的生产构建之后，不要单独执行 `wrangler deploy`。也可以运行第 3 节的部署流水线并选 `production`：它在全新检出上做同样的生产构建与部署，然后运行冒烟检查。
 
 ## 2. Worker 配置放在哪里
 
@@ -39,11 +39,42 @@
 
 `npm run readiness` 和生产构建的门禁读取同一组来源，按以下顺序，后面的覆盖前面的：`wrangler.jsonc` 的 `vars`（不含 `PUBLIC_*`）、`.env`/`.env.production` 等 mode 文件、构建机 shell。`.dev.vars` 只供本地开发，两个门禁都不读。secret 不在这些来源里，门禁要求它们以同名值出现在 shell 或 `.env.production` 中；那只是本地检查，不会替你绑定到 Cloudflare，也看不到 `wrangler secret put` 的实际值。
 
-## 3. 预览与生产分开
+## 3. 预览、生产与部署流水线
 
 - 预览与生产使用各自的 Upstash 数据库和 Airtable base/table，各自的 `APP_ENV`（限流键以它为前缀）。预览测试不能写入生产 CRM 或联系真实客户。
 - Turnstile、Resend 可以同账号，但预览的主机名和收件箱要与生产分开登记。
-- 预览要用独立的 Worker：在 `wrangler.jsonc` 加 `env.preview`，给它自己的 `name`、`vars` 和路由。`env.preview` 的 `vars` 只到达 Worker 运行时，不改变写进页面的 `PUBLIC_*` 值，所以预览的公开构建值要放进独立的 `.env.preview`：`PUBLIC_APP_ENV=experiment`、预览域名的 `PUBLIC_SITE_URL` 和预览 Turnstile widget 的 `PUBLIC_TURNSTILE_SITE_KEY`。环境和 mode 都在构建时选定，用 `CLOUDFLARE_ENV=preview npm run build -- --mode preview && npx wrangler deploy` 部署（不要给 `wrangler deploy` 加 `--env`）；不带 `--mode preview` 时构建会读取 `.env.production`，把生产域名、可索引的 robots 和生产分析配置写进预览页面。secret 用 `npx wrangler secret put <NAME> --name <预览 Worker 名>` 单独设置。Workers 自带的版本预览 URL 用的是生产 Worker 的 secret 和 `vars`，不算独立预览。
+- 预览是独立的 Worker：`wrangler.jsonc` 已声明 `env.preview`，Wrangler 把它命名为 `<name>-preview`（模板为 `astro-business-starter-preview`），随顶层 `name` 一起改变。`env.preview` 必须保留自己的 `"routes"`（空数组或预览域名）：不写时 Wrangler 继承顶层 `routes`，一次预览部署就会把正式域名从生产 Worker 改绑到预览 Worker。`vars` 和 `ratelimits` 不继承：预览的服务端值（`APP_ENV`、预览的 `PUBLIC_SITE_URL`、`TURNSTILE_ALLOWED_HOSTS` 等，见第 2 节）写进 `env.preview.vars`，预览限流的 `namespace_id`（模板为 `1002`）同样须在账户内唯一。模板为预览 Worker 打开 `workers_dev`，地址是 `<name>-preview.<账户子域>.workers.dev`；给预览配了自己的域名后，可在 `env.preview` 里关掉。
+- `env.preview` 的 `vars` 只到达 Worker 运行时，不改变写进页面的 `PUBLIC_*` 值。手动部署预览时，公开构建值放进独立的 `.env.preview`：`PUBLIC_APP_ENV=experiment`、预览地址的 `PUBLIC_SITE_URL` 和预览 Turnstile widget 的 `PUBLIC_TURNSTILE_SITE_KEY`。环境和 mode 都在构建时选定，用 `CLOUDFLARE_ENV=preview npm run build -- --mode preview && npx wrangler deploy` 部署（不要给 `wrangler deploy` 加 `--env`）；不带 `--mode preview` 时构建会读取 `.env.production`，把生产域名、可索引的 robots 和生产分析配置写进预览页面。secret 用 `npx wrangler secret put <NAME> --name <预览 Worker 名>` 单独设置。Workers 自带的版本预览 URL 用的是生产 Worker 的 secret 和 `vars`，不算独立预览。
+
+### 部署流水线
+
+`.github/workflows/deploy.yml` 只能手动运行（GitHub 的 Actions → Deploy → Run workflow），运行时选 `preview` 或 `production`：
+
+| 步骤 | `preview` | `production` |
+| --- | --- | --- |
+| 前提 | 任何分支 | 只能从 `main` 运行，且这个提交在 `main` 上的 CI（push）已通过 |
+| 构建 | `CLOUDFLARE_ENV=preview`、`PUBLIC_APP_ENV=experiment`、`--mode preview`（noindex） | `PUBLIC_APP_ENV=production npm run build`，构建内的 readiness 门禁拒绝时停止，不部署 |
+| 部署 | 用锁文件里的 Wrangler 运行 `wrangler deploy`，目标是 `<name>-preview` | 同样的命令，目标是顶层 Worker |
+| 冒烟 | 对该 Environment 的 `PUBLIC_SITE_URL` 运行 `scripts/deploy-smoke.mjs` | 同左 |
+
+冒烟检查先等首页返回 200（最多约 5 分钟；新加的自定义域名在部署后可能还在签发证书），再要求每种语言的每个登记页面返回 200 并带有 `src/security-headers.ts` 列出的全部安全响应头，最后向 `/_actions/inquiry` 发一个空请求，要求返回 400 和 `Cache-Control: no-store`。空请求在 Action 输入校验阶段就被拒绝，不调用限流、Turnstile、邮件或 CRM，也不产生询盘。也可以在本地对已上线站点运行 `node scripts/deploy-smoke.mjs https://www.example.com`。通过只说明这个地址此刻在正常响应，不证明它正在服务本次提交、secret 已绑定或询盘能送达，这些仍按第 8 节逐层取证。流水线不运行 `wrangler secret put`，也不改 Cloudflare 面板里的设置。
+
+第一次运行前，站点负责人要创建以下设置（模板仓库没有这些设置，在模板里运行会停在 “Check required settings”）：
+
+1. **Cloudflare API token。** 在 Cloudflare 面板的 My Profile → API Tokens 用 “Edit Cloudflare Workers” 模板创建，Account Resources 只选本站所在账户；`wrangler.jsonc` 为生产或预览声明了域名时，Zone Resources 选该域名所在的 zone，因为增删路由和自定义域名需要该 zone 的 Workers Routes 编辑权限（[Workers 权限](https://developers.cloudflare.com/workers/authorization/workers/)）。preview 与 production 可以各用一个 token。
+2. **GitHub Environment。** 在仓库 Settings → Environments 建两个 Environment，名字必须是 `preview` 和 `production`。`production` 的 Deployment branches and tags 选 “Selected branches and tags”，只加 `main`；需要人工批准时再加 Required reviewers。`preview` 不需要分支限制。
+3. **Environment 里的 secret 与 variable：**
+
+| 名称 | 类型 | `preview` | `production` | 用途 |
+| --- | --- | --- | --- | --- |
+| `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID` | Secret | 必需 | 必需 | 只在部署一步使用 |
+| `PUBLIC_SITE_URL` | Variable | 必需，预览地址 | 必需，正式域名 | 写进页面，也是冒烟检查的目标；与该 Worker `vars` 里的 `PUBLIC_SITE_URL` 一致 |
+| `PUBLIC_TURNSTILE_SITE_KEY` | Variable | 预览 widget 的 site key | 必需 | 写进页面 |
+| `PUBLIC_GA_MEASUREMENT_ID`、`PUBLIC_GOOGLE_SITE_VERIFICATION`、`PUBLIC_BING_SITE_VERIFICATION` | Variable | 不读取 | 可选 | 写进页面（第 5 节） |
+| `TURNSTILE_SECRET_KEY`、`RESEND_API_KEY`、`AIRTABLE_API_KEY`、`UPSTASH_REDIS_REST_TOKEN`、`RATE_LIMIT_PEPPER` | Secret | 不读取 | 必需 | 只给 readiness 门禁检查，与 Worker 上的值保持一致 |
+| `TURNSTILE_ALLOWED_HOSTS`、`RESEND_FROM_EMAIL`、`INQUIRY_TO_EMAIL`、`AIRTABLE_BASE_ID`、`AIRTABLE_TABLE_NAME`、`UPSTASH_REDIS_REST_URL` | Secret | 不读取 | 只在该值是 Worker secret、不在 `wrangler.jsonc` 的 `vars` 里时需要 | 只给 readiness 门禁检查 |
+
+4. **Cloudflare 上的 Worker 配置。** 流水线只上传代码和 `wrangler.jsonc` 里的配置。两个 Worker 的 secret 仍由负责人用 `wrangler secret put` 设置（第 2 节），GitHub 里的同名 secret 只用于门禁，不会送到 Cloudflare：两边的值不一致时门禁照样通过，部署后的 Worker 却用另一份值。
 
 ## 4. 供应商与域名
 
