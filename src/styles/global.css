@@ -1081,7 +1081,8 @@ p {
 /* The card is in the page flow and sticks to the window bottom, so on a short page its own
    box (plus the margin gap) lifts the footer above it from the first paint instead of
    padding added after the script measures it. pre-paint.js shows it before first paint
-   when no choice is stored; site-browser.ts takes over through the hidden attribute. */
+   unless a current, complete choice is stored (consent-record.js); site-browser.ts takes
+   over through the hidden attribute. */
 html[data-consent-pending] .cookie-banner[hidden] {
   display: flex !important;
 }
