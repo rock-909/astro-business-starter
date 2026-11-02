@@ -174,6 +174,7 @@ The derived site has one language and a Resources submenu, so it covers submenus
 - Default-denied, analytics-only, advertising-only and combined attribution; category withdrawal, refresh and locale navigation do not restore disallowed browser records; actual inquiry succeeds in every consent state.
 - Current hash/query locale switching with drafts, optional company configurations and invalid field types, required nonblank identity/SEO, and editable field border contrast of at least 3:1 in both themes.
 - No-JavaScript fallback, keyboard use and narrow-view layout.
+- Automated axe WCAG 2.2 A/AA scans (`tests/a11y.spec.ts`) on desktop and phone in both themes: every page and the 404, the cookie card and its options, the open menu with its header submenus and language menu, and the inquiry form with validation errors; plus a reverse check that axe reports a missing label and low contrast.
 
 Only external service boundaries are mocked. Browser tests use the built assets and real Worker. The lost-response test executes the Action, then discards its HTTP response; it does not forge a successful handler result. Test control is a separate loopback-only Node service and is not part of the app build.
 
