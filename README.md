@@ -68,6 +68,7 @@ npm run test:browser
 - **去掉一种语言**（如西语）：删掉 `src/site-routes.ts` 里 `localeTable` 的 `es` 那一行，移走 `src/content/es/`，再从 `src/site-data.json` 的 `readiness.legalReviewed` 删掉 `es`（留着会被配置校验拒绝）。只剩一种语言时不显示语言切换，hreflang、og:locale 和 sitemap 只列剩下的语言，旧的 `/es/...` 网址返回 404。
 - **增加一种语言**：在 `localeTable` 加一行（`name` 是语言自己的名字，语言菜单里显示它；`ogLocale`），把 `src/content/en/` 复制成 `src/content/<代码>/` 并全部翻译，在 `legalReviewed` 加上这个语言。它的网址在 `/<代码>` 下。第一个语言是默认语言，不加前缀；文案类型以英文 `messages.json` 为准，如果去掉英语，要把 `src/site.ts` 里 `Messages` 的类型来源改成新的默认语言。
 - **改主题色**：`src/styles/global.css` 的浅色、`[data-theme='dark']` 和系统深色三块一起改。`npm run test:browser` 会检查两个深色块一致，以及主要文字与背景在两种主题下对比度至少 4.5:1。
+- **定视觉方向**：设计规则、方向环节和审查清单见 [DESIGN.md](DESIGN.md) 指向的 `docs/design/`。
 
 公开配置在构建时使用，Cloudflare 运行时另需服务端绑定及域名/主机配置。所有示例均不含真实凭证。不要将服务端 secret 放入 `PUBLIC_*`。
 
