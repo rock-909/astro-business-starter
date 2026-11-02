@@ -80,7 +80,7 @@ npm run readiness
 PUBLIC_APP_ENV=production npm run build
 ```
 
-默认占位身份、模板文案、模板 Worker 名、模板分享图、所配品牌文件缺失及缺失配置会让这两项检查**拒绝上线**；通过也不能证明凭证有效、Cloudflare 已绑定、邮件到达、CRM 持久化或部署成功。本项目没有自动部署流程。上线步骤、Worker bindings、供应商与域名设置、上线证据和交接见 [LAUNCH.md](LAUNCH.md)。
+默认占位身份、模板文案、模板 Worker 名、模板分享图、所配品牌文件缺失及缺失配置会让这两项检查**拒绝上线**；通过也不能证明凭证有效、Cloudflare 已绑定、邮件到达、CRM 持久化或部署成功。部署只在手动触发时进行（命令或手动运行的 GitHub Actions 流水线），没有自动部署。上线步骤、Worker bindings、供应商与域名设置、上线证据和交接见 [LAUNCH.md](LAUNCH.md)。
 
 ## 关键行为
 

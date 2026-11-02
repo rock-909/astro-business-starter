@@ -26,4 +26,23 @@
   // "routes": [{ "pattern": "www.example.com", "custom_domain": true }],
   // "workers_dev": false,
   // "preview_urls": false,
+  // Preview is its own Worker, "<name>-preview", with its own vars and secrets; build
+  // with CLOUDFLARE_ENV=preview to deploy it (LAUNCH.md section 3). Wrangler copies the
+  // top-level routes into an environment that names none, which would move the production
+  // custom domain to the preview Worker, so keep "routes" here (empty, or the preview
+  // domain). vars and ratelimits are never copied: declare the preview values here.
+  "env": {
+    "preview": {
+      "routes": [],
+      "workers_dev": true,
+      // "vars": { "APP_ENV": "preview", "PUBLIC_SITE_URL": "https://…", … },
+      "ratelimits": [
+        {
+          "name": "INQUIRY_RATE_LIMITER",
+          "namespace_id": "1002",
+          "simple": { "limit": 10, "period": 60 },
+        },
+      ],
+    },
+  },
 }
