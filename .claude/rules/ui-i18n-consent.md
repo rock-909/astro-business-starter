@@ -6,6 +6,7 @@ paths:
   - "src/styles/**/*.css"
   - "src/content/**/messages.json"
   - "tests/ui.spec.ts"
+  - "tests/a11y.spec.ts"
   - "src/lib/inquiry-limits.ts"
 ---
 

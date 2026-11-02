@@ -147,6 +147,22 @@ Node 24.22.1, `TEST_PORT=5383`, Playwright's cached Chromium. The counterexample
 
 None of these checks prove live providers or deployment.
 
+## Accessibility (axe, WCAG 2.2 A/AA) tests (2026-11-01 UTC)
+
+Node 24.22.1, dependencies from `npm ci`, `CI=1`, Playwright's cached Chromium, `@axe-core/playwright` 4.14.0. `tests/a11y.spec.ts` runs in both the template and the derived-site Playwright projects.
+
+| Check | Result |
+|---|---|
+| `phone, light/dark theme > the open menu and language menu pass axe`, template, before the `SiteHeader.astro` space fix (run by the author) | Expected FAIL — `label-content-name-mismatch` on `.mobile-nav-item[aria-label="Languages: English"]`: the visible text read "LanguagesEnglish" |
+| Same test after the fix (run by the author) | PASS |
+| `axe reports a field without a label and text without contrast` (reverse check), template and derived (run by the author) | PASS — `label` and `color-contrast` reported |
+| Pixel comparison of the drawer language row with and without the space node (run by the author) | Identical pixels, equal bounding box |
+| `npm run verify`, `TEST_PORT=5273` (run by the author) | PASS — exit 0; node tests 54 pass, 0 fail; Playwright 141 passed, 7 skipped |
+| `npx playwright test tests/a11y.spec.ts`, `TEST_PORT=5293`, after review round 1 (the open menu test now opens every configured header submenu, desktop panel and phone drawer group, checks its links are visible and runs axe) | PASS — 34 passed (template and derived, including the reverse check). An earlier run of the same file while the machine's load average was about 77 hit 30 s timeouts in 5 tests, 4 of them unchanged tests; the 8 menu tests then passed on their own and the whole file passed once load fell |
+| Same menu test, template phone, with the space node removed and rebuilt (this review round) | Expected FAIL — 2/2 (light and dark) on `label-content-name-mismatch`; PASS 2/2 after restoring the space and rebuilding |
+
+The derived site has one language and a Resources submenu, so it covers submenus but not the language menu; the template has two languages and no submenu. None of these checks prove live providers or deployment.
+
 ## What the tests exercise
 
 - All eight English/Spanish content routes, localized 404, canonical/hreflang metadata, SEO endpoints, health and static MIME/security headers.
@@ -158,6 +174,7 @@ None of these checks prove live providers or deployment.
 - Default-denied, analytics-only, advertising-only and combined attribution; category withdrawal, refresh and locale navigation do not restore disallowed browser records; actual inquiry succeeds in every consent state.
 - Current hash/query locale switching with drafts, optional company configurations and invalid field types, required nonblank identity/SEO, and editable field border contrast of at least 3:1 in both themes.
 - No-JavaScript fallback, keyboard use and narrow-view layout.
+- Automated axe WCAG 2.2 A/AA scans (`tests/a11y.spec.ts`) on desktop and phone in both themes: every page and the 404, the cookie card and its options, the open menu with its header submenus and language menu, and the inquiry form with validation errors; plus a reverse check that axe reports a missing label and low contrast.
 
 Only external service boundaries are mocked. Browser tests use the built assets and real Worker. The lost-response test executes the Action, then discards its HTTP response; it does not forge a successful handler result. Test control is a separate loopback-only Node service and is not part of the app build.
 

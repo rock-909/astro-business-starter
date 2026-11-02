@@ -277,7 +277,9 @@ const svg = {
                     <span class="mobile-language-label">
                       <svg class="icon" {...svg} set:html={icons.globe} />
                       {t.navigation.language}
-                    </span>
+                    </span>{' '}
+                    {/* The space keeps the visible text "Languages English" inside the
+                        accessible name (WCAG 2.5.3); flex layout does not render it. */}
                     <span class="mobile-language-label">
                       <span lang={locale}>{languageName(locale)}</span>
                       <svg class="icon chevron" {...svg} set:html={icons.chevron} />

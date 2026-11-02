@@ -32,6 +32,7 @@ Exact installed versions, including transitive ones, are recorded in `package-lo
 | @astrojs/check | MIT |
 | @emnapi/runtime (peer required by `@astrojs/check`'s WASM runtime) | MIT |
 | @playwright/test | Apache-2.0 |
+| @axe-core/playwright (with its `axe-core` dependency; browser tests only) | MPL-2.0 |
 | typescript | Apache-2.0 |
 | wrangler | MIT OR Apache-2.0 |
 | miniflare (Wrangler transitive) | MIT |
