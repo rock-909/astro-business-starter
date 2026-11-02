@@ -1,4 +1,5 @@
 import { applyAttributionConsent } from './attribution';
+import { storedConsent } from './consent-record.js';
 
 type Consent = { necessary: true; analytics: boolean; advertising: boolean };
 const denied: Consent = { necessary: true, analytics: false, advertising: false };
@@ -73,15 +74,8 @@ function applyConsent(consent: Consent) {
 }
 function loadConsent(): Consent | null {
   try {
-    const stored = JSON.parse(localStorage.getItem('cookie-consent') || 'null');
-    if (
-      stored?.version === 3 &&
-      typeof stored.updatedAt === 'string' &&
-      stored.consent?.necessary === true &&
-      typeof stored.consent.analytics === 'boolean' &&
-      typeof stored.consent.advertising === 'boolean'
-    )
-      return stored.consent;
+    const stored: Consent | null = storedConsent(localStorage.getItem('cookie-consent'));
+    if (stored) return stored;
     localStorage.removeItem('cookie-consent');
   } catch {
     /* Optional storage remains fail-closed. */
@@ -92,7 +86,7 @@ function syncConsent() {
   const stored = loadConsent();
   applyConsent(stored || { ...denied });
   banner.hidden = !!stored;
-  // pre-paint.js showed the card from storage alone; from here the hidden attribute decides.
+  // pre-paint.js settled the card by the same rule; from here the hidden attribute decides.
   delete document.documentElement.dataset.consentPending;
   analytics.checked = stored?.analytics || false;
   advertising.checked = stored?.advertising || false;

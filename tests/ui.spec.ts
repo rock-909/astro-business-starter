@@ -859,10 +859,26 @@ test('the footer does not move while the home page loads, on a first visit and a
     [1350, 940],
   ]) {
     await page.setViewportSize({ width: width!, height: height! });
-    for (const visit of ['first', 'return']) {
+    // A stored record from an older consent version, or one missing a category, is no choice:
+    // the card must already stand where it rests from the first paint.
+    for (const visit of ['first', 'return', 'older record', 'incomplete record']) {
       await page.goto(home);
       await page.evaluate(() => localStorage.clear());
       if (visit === 'return') await dismissConsent(page, site);
+      const updatedAt = new Date().toISOString();
+      const stored = {
+        'older record': { consent: { necessary: true, analytics: true }, updatedAt, version: 2 },
+        'incomplete record': {
+          consent: { necessary: true, analytics: false },
+          updatedAt,
+          version: 3,
+        },
+      }[visit];
+      if (stored)
+        await page.evaluate(
+          (record) => localStorage.setItem('cookie-consent', JSON.stringify(record)),
+          stored,
+        );
       await page.reload();
       // site-browser.ts has run once the theme switcher shows the current choice.
       await expect(
@@ -905,7 +921,7 @@ test('the footer does not move while the home page loads, on a first visit and a
       expect(result.shifts, where).toEqual([]);
       // Where it always rested: the page ends with the footer, or with the open cookie card
       // and 24px of room above it so the card never hides the last footer row.
-      expect(result.card > 0, where).toBe(visit === 'first');
+      expect(result.card > 0, where).toBe(visit !== 'return');
       expect(result.footerEnd, where).toBeCloseTo(
         result.pageEnd - (result.card ? result.card + 24 : 0),
         0,
