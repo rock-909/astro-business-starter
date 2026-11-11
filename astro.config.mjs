@@ -17,7 +17,7 @@ export default defineConfig({
         name: 'production-readiness',
         enforce: 'pre',
         config() {
-          // ponytail: adapter 14.4.2 overwrites public env; remove this restoration
+          // ponytail: adapter 14.4.4 overwrites public env; remove this restoration
           // when it preserves Vite precedence (covered by real-build tests).
           // Restore the actual shell inputs so Vite can apply shell > mode > base
           // precedence consistently. Worker-only bindings are left untouched.
